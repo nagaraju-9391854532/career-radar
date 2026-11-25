@@ -2456,6 +2456,66 @@ button,
   flex-shrink: 0;
 }
 
+/* ---------- Auth Sign-In / Sign-Up Gate ---------- */
+.auth-shell {
+  max-width: 500px;
+  margin: 48px auto 80px;
+  padding: 0 20px;
+}
+
+.auth-shell[hidden],
+#main-workspace[hidden],
+#main-nav-tabs[hidden] {
+  display: none;
+}
+
+.auth-card {
+  padding: 30px 28px;
+  border-radius: var(--radius-lg);
+  background: var(--color-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-elevated);
+}
+
+.auth-head h1 {
+  margin: 0 0 8px;
+  font-family: var(--heading-font);
+  font-size: clamp(1.65rem, 3vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  margin: 20px 0 18px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-form .btn-accent {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-destructive-soft);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: var(--color-destructive-text);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
 /* ---------- Responsive & Reduced Motion ---------- */
 @media (max-width: 920px) {
   .workspace-grid.is-split {

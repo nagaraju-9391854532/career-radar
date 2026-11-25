@@ -1,3 +1,18 @@
+const mainNavTabs = document.querySelector('#main-nav-tabs');
+const mainWorkspace = document.querySelector('#main-workspace');
+const accountPill = document.querySelector('#account-pill');
+const logoutBtn = document.querySelector('#logout-btn');
+const authView = document.querySelector('#auth-view');
+const authTabLogin = document.querySelector('#auth-tab-login');
+const authTabSignup = document.querySelector('#auth-tab-signup');
+const authForm = document.querySelector('#auth-form');
+const authNameField = document.querySelector('#auth-name-field');
+const authNameInput = document.querySelector('#auth-name-input');
+const authEmailInput = document.querySelector('#auth-email-input');
+const authPasswordInput = document.querySelector('#auth-password-input');
+const authErrorEl = document.querySelector('#auth-error');
+const authSubmitBtn = document.querySelector('#auth-submit-btn');
+
 const tabRetrieveBtn = document.querySelector('#tab-retrieve');
 const tabPortalsBtn = document.querySelector('#tab-portals');
 const panelRetrieve = document.querySelector('#panel-retrieve');
@@ -142,6 +157,8 @@ let selectedChangesOnly = false;
 let bookmarkMap = {};
 let userSkills = [];
 let desktopAlertsEnabled = false;
+let currentUser = null;
+let authMode = 'login'; // 'login' | 'signup'
 
 const INDIA_LOCATION_RE =
   /\b(india|bengaluru|bangalore|pune|hyderabad|mumbai|chennai|gurugram|gurgaon|noida|new delhi|delhi|kolkata|ahmedabad|kochi|chandigarh|jaipur|indore|coimbatore|thiruvananthapuram|trivandrum|navi mumbai|thane)\b/i;
@@ -2058,6 +2075,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 async function loadScrapers() {
+  if (scraperSelect.options.length > 1) return;
   try {
     const response = await fetch('/api/health');
     if (!response.ok) return;
@@ -2709,6 +2727,149 @@ function initDesktopAlerts() {
   });
 }
 
+function setAuthMode(mode) {
+  authMode = mode === 'signup' ? 'signup' : 'login';
+  const isSignup = authMode === 'signup';
+  if (authTabLogin) {
+    authTabLogin.classList.toggle('is-active', !isSignup);
+    authTabLogin.setAttribute('aria-selected', String(!isSignup));
+  }
+  if (authTabSignup) {
+    authTabSignup.classList.toggle('is-active', isSignup);
+    authTabSignup.setAttribute('aria-selected', String(isSignup));
+  }
+  if (authNameField) authNameField.hidden = !isSignup;
+  if (authPasswordInput) {
+    authPasswordInput.setAttribute(
+      'autocomplete',
+      isSignup ? 'new-password' : 'current-password'
+    );
+  }
+  if (authSubmitBtn) {
+    authSubmitBtn.textContent = isSignup ? 'Create Account' : 'Sign In';
+  }
+  if (authErrorEl) {
+    authErrorEl.hidden = true;
+    authErrorEl.textContent = '';
+  }
+  refreshAllSlidingPills();
+}
+
+function enterSignedOutState() {
+  currentUser = null;
+  if (watchEventSource) {
+    watchEventSource.close();
+    watchEventSource = null;
+  }
+  stopActiveStream();
+  manualViewActive = false;
+  savedPortals = [];
+  bookmarkMap = {};
+  watchState = null;
+  resetResultsState();
+
+  if (mainWorkspace) mainWorkspace.hidden = true;
+  if (mainNavTabs) mainNavTabs.hidden = true;
+  if (toggleAdvancedBtn) toggleAdvancedBtn.hidden = true;
+  if (accountPill) accountPill.hidden = true;
+  if (logoutBtn) logoutBtn.hidden = true;
+  if (authView) authView.hidden = false;
+  refreshAllSlidingPills(false);
+}
+
+function enterSignedInWorkspace(user) {
+  currentUser = user;
+  if (authView) authView.hidden = true;
+  if (mainWorkspace) mainWorkspace.hidden = false;
+  if (mainNavTabs) mainNavTabs.hidden = false;
+  if (toggleAdvancedBtn) toggleAdvancedBtn.hidden = false;
+  if (accountPill) {
+    accountPill.textContent = user.name || user.email;
+    accountPill.hidden = false;
+  }
+  if (logoutBtn) logoutBtn.hidden = false;
+
+  switchTab('retrieve');
+  refreshAllSlidingPills(false);
+  void loadBookmarks();
+  void loadScrapers();
+  void loadPortals();
+  connectWatchEvents();
+}
+
+async function initAuthSession() {
+  if (authTabLogin) {
+    authTabLogin.addEventListener('click', () => setAuthMode('login'));
+  }
+  if (authTabSignup) {
+    authTabSignup.addEventListener('click', () => setAuthMode('signup'));
+  }
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await fetch('/api/auth/logout', { method: 'POST' });
+      } finally {
+        enterSignedOutState();
+      }
+    });
+  }
+  if (authForm) {
+    authForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (authErrorEl) {
+        authErrorEl.hidden = true;
+        authErrorEl.textContent = '';
+      }
+      const email = authEmailInput?.value.trim() || '';
+      const password = authPasswordInput?.value || '';
+      const name = authNameInput?.value.trim() || '';
+
+      if (authSubmitBtn) authSubmitBtn.disabled = true;
+      try {
+        const endpoint =
+          authMode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            password,
+            ...(authMode === 'signup' && name ? { name } : {}),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Authentication failed.');
+        }
+        if (authPasswordInput) authPasswordInput.value = '';
+        enterSignedInWorkspace(data.user);
+      } catch (error) {
+        if (authErrorEl) {
+          authErrorEl.textContent =
+            error instanceof Error ? error.message : String(error);
+          authErrorEl.hidden = false;
+        }
+      } finally {
+        if (authSubmitBtn) authSubmitBtn.disabled = false;
+      }
+    });
+  }
+
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.user) {
+        enterSignedInWorkspace(data.user);
+        return;
+      }
+    }
+  } catch {
+    // Fallback to login gate
+  }
+  enterSignedOutState();
+}
+
 setInterval(() => {
   if (watchState && !watchState.isSyncing && watchState.config?.enabled) {
     updateWatchBanner();
@@ -2722,7 +2883,4 @@ initMagneticButtons();
 initButtonRipples();
 initMySkills();
 initDesktopAlerts();
-void loadBookmarks();
-void loadScrapers();
-void loadPortals();
-connectWatchEvents();
+void initAuthSession();

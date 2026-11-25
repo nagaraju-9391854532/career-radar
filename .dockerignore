@@ -1,0 +1,11 @@
+.git
+.github
+.agents
+.claude
+.data
+.vscode
+node_modules
+dist
+tsconfig.tsbuildinfo
+*.log
+.env

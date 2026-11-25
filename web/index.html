@@ -46,7 +46,12 @@
             <span id="scraper-count-pill" class="brand-pill">14 boards</span>
           </div>
 
-          <nav class="nav-tabs" role="tablist" aria-label="Workspace views">
+          <nav
+            id="main-nav-tabs"
+            class="nav-tabs"
+            role="tablist"
+            aria-label="Workspace views"
+            hidden>
             <button
               type="button"
               id="tab-retrieve"
@@ -169,7 +174,8 @@
               id="toggle-advanced"
               class="btn btn-ghost"
               aria-expanded="false"
-              aria-controls="advanced-panel">
+              aria-controls="advanced-panel"
+              hidden>
               <svg
                 width="15"
                 height="15"
@@ -192,11 +198,106 @@
               </svg>
               <span>Board Override</span>
             </button>
+
+            <span id="account-pill" class="brand-pill" hidden></span>
+            <button type="button" id="logout-btn" class="btn btn-ghost" hidden>
+              Sign Out
+            </button>
           </div>
         </div>
       </header>
 
-      <main class="container">
+      <section id="auth-view" class="auth-shell" hidden>
+        <div class="auth-card spotlight-card animate-enter">
+          <div class="auth-head">
+            <div class="hero-kicker">
+              <span class="kicker-dot"></span>
+              <span class="kicker-script">your personal career radar</span>
+            </div>
+            <h1 id="auth-heading">
+              Welcome to
+              <span class="hero-highlight"
+                >Career Radar<svg
+                  class="hand-underline"
+                  viewBox="0 0 210 16"
+                  fill="none"
+                  aria-hidden="true">
+                  <path
+                    d="M3 11.5C52 4.5 138 2.5 207 9.5"
+                    stroke="currentColor"
+                    stroke-width="3.2"
+                    stroke-linecap="round" /></svg
+              ></span>
+            </h1>
+            <p class="field-hint">
+              Sign in or create an account to save your own career portal links,
+              track applications, and monitor updates automatically.
+            </p>
+          </div>
+
+          <div
+            class="segmented auth-tabs"
+            role="tablist"
+            aria-label="Account mode">
+            <button
+              type="button"
+              id="auth-tab-login"
+              class="seg-btn is-active"
+              role="tab"
+              aria-selected="true">
+              Sign In
+            </button>
+            <button
+              type="button"
+              id="auth-tab-signup"
+              class="seg-btn"
+              role="tab"
+              aria-selected="false">
+              Create Account
+            </button>
+          </div>
+
+          <form id="auth-form" class="auth-form" novalidate>
+            <label id="auth-name-field" class="field" hidden>
+              <span>Full Name</span>
+              <input
+                id="auth-name-input"
+                type="text"
+                placeholder="e.g. Alex Rivera"
+                autocomplete="name" />
+            </label>
+
+            <label class="field">
+              <span>Email Address</span>
+              <input
+                id="auth-email-input"
+                type="email"
+                placeholder="you@example.com"
+                autocomplete="email"
+                required />
+            </label>
+
+            <label class="field">
+              <span>Password</span>
+              <input
+                id="auth-password-input"
+                type="password"
+                placeholder="Minimum 8 characters"
+                autocomplete="current-password"
+                minlength="8"
+                required />
+            </label>
+
+            <p id="auth-error" class="auth-error" hidden role="alert"></p>
+
+            <button type="submit" id="auth-submit-btn" class="btn btn-accent">
+              Sign In
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <main id="main-workspace" class="container" hidden>
         <section
           id="status-banner"
           class="status-banner"

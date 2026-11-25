@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   createServer,
   type IncomingMessage,
@@ -20,6 +21,23 @@ import {
   type CompanyInput,
   type ScraperName,
 } from '../src/index.ts';
+import {
+  assertSafeExternalUrl,
+  authenticateRequest,
+  checkAuthRateLimit,
+  clearSessionCookie,
+  getClientIp,
+  hashPassword,
+  issueSessionCookie,
+  verifyPassword,
+} from './auth.ts';
+import {
+  dbCountUsers,
+  dbCreateUser,
+  dbFindUserByEmail,
+  dbImportLegacySingleUserFiles,
+  type PublicUser,
+} from './db.ts';
 import {
   extractJobRequirements,
   isIndiaLocation,
@@ -49,17 +67,28 @@ const MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
 };
 
-function sendJson(res: ServerResponse, status: number, data: unknown): void {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  data: unknown,
+  extraHeaders?: Record<string, string>
+): void {
   const body = JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    ...extraHeaders,
   });
   res.end(body);
 }
 
 class InputError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    public readonly status = 400
+  ) {
     super(message);
     this.name = 'InputError';
   }
@@ -68,16 +97,13 @@ class InputError extends Error {
 function normalizeUrlInput(raw: string): string {
   const trimmed = raw.trim();
   if (/^https?:\/\//i.test(trimmed)) {
-    if (!URL.canParse(trimmed)) {
-      throw new InputError('That does not look like a valid URL.');
-    }
+    assertSafeExternalUrl(trimmed);
     return trimmed;
   }
   if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)) {
     const withProtocol = `https://${trimmed}`;
-    if (URL.canParse(withProtocol)) {
-      return withProtocol;
-    }
+    assertSafeExternalUrl(withProtocol);
+    return withProtocol;
   }
   return '';
 }
@@ -139,7 +165,14 @@ async function readJsonBody(
 }
 
 function handleApiError(res: ServerResponse, error: unknown): void {
-  if (error instanceof InputError || error instanceof TypeError) {
+  if (error instanceof InputError) {
+    sendJson(res, error.status, {
+      error: error.message,
+      code: 'INVALID_INPUT',
+    });
+    return;
+  }
+  if (error instanceof TypeError) {
     sendJson(res, 400, { error: error.message, code: 'INVALID_INPUT' });
     return;
   }
@@ -163,6 +196,125 @@ function handleApiError(res: ServerResponse, error: unknown): void {
   sendJson(res, 500, { error: message, code: 'INTERNAL_ERROR' });
 }
 
+function requireUser(
+  req: IncomingMessage,
+  res: ServerResponse
+): PublicUser | null {
+  const user = authenticateRequest(req);
+  if (!user) {
+    sendJson(res, 401, {
+      error: 'Authentication required.',
+      code: 'UNAUTHORIZED',
+    });
+    return null;
+  }
+  return user;
+}
+
+function assertSameOrigin(req: IncomingMessage): void {
+  const origin = req.headers.origin;
+  const host = req.headers.host;
+  if (!origin || !host) return;
+  const parsed = URL.parse(origin);
+  if (!parsed || parsed.host !== host) {
+    throw new InputError('Cross-origin request rejected.', 403);
+  }
+}
+
+async function handleSignup(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  assertSameOrigin(req);
+  if (!checkAuthRateLimit(getClientIp(req))) {
+    throw new InputError('Too many auth attempts. Please wait a bit.', 429);
+  }
+  const body = await readJsonBody(req);
+  const email =
+    typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  const rawName = typeof body.name === 'string' ? body.name.trim() : '';
+
+  if (!EMAIL_RE.test(email)) {
+    throw new InputError('Please enter a valid email address.');
+  }
+  if (password.length < 8) {
+    throw new InputError('Password must be at least 8 characters long.');
+  }
+  if (dbFindUserByEmail(email)) {
+    throw new InputError('An account with that email already exists.', 409);
+  }
+
+  const isFirstAccount = dbCountUsers() === 0;
+  const userId = randomUUID();
+  const name = rawName || email.split('@')[0] || 'User';
+  const createdAt = new Date().toISOString();
+
+  dbCreateUser({
+    id: userId,
+    email,
+    name: name.slice(0, 80),
+    passwordHash: hashPassword(password),
+    createdAt,
+  });
+
+  if (isFirstAccount) {
+    dbImportLegacySingleUserFiles(userId);
+  }
+
+  const cookie = issueSessionCookie(userId, req);
+  sendJson(
+    res,
+    201,
+    { user: { id: userId, email, name, createdAt } },
+    { 'Set-Cookie': cookie }
+  );
+}
+
+async function handleLogin(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
+  assertSameOrigin(req);
+  if (!checkAuthRateLimit(getClientIp(req))) {
+    throw new InputError('Too many auth attempts. Please wait a bit.', 429);
+  }
+  const body = await readJsonBody(req);
+  const email =
+    typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+
+  if (!email || !password) {
+    throw new InputError('Email and password are required.');
+  }
+
+  const user = dbFindUserByEmail(email);
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    throw new InputError('Invalid email or password.', 401);
+  }
+
+  const cookie = issueSessionCookie(user.id, req);
+  sendJson(
+    res,
+    200,
+    {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        createdAt: user.createdAt,
+      },
+    },
+    { 'Set-Cookie': cookie }
+  );
+}
+
+function handleLogout(req: IncomingMessage, res: ServerResponse): void {
+  assertSameOrigin(req);
+  const cookie = clearSessionCookie(req);
+  sendJson(res, 200, { ok: true }, { 'Set-Cookie': cookie });
+}
+
 async function handleApiJob(url: URL, res: ServerResponse): Promise<void> {
   const jobUrl = url.searchParams.get('url')?.trim() ?? '';
   const scraperParam = url.searchParams.get('scraper')?.trim() ?? '';
@@ -180,9 +332,7 @@ async function handleApiJob(url: URL, res: ServerResponse): Promise<void> {
       id: idParam,
     });
   } else if (jobUrl) {
-    if (!URL.canParse(jobUrl)) {
-      throw new InputError('Invalid job posting URL.');
-    }
+    assertSafeExternalUrl(jobUrl);
     job = await fetchJob(jobUrl);
   } else {
     throw new InputError('Provide either url or scraper, slug, and id.');
@@ -231,6 +381,7 @@ async function withFreshFetch<T>(fn: () => Promise<T>): Promise<T> {
 const watcher = new PortalWatcher(withFreshFetch);
 
 async function handleApiJobsStream(
+  userId: string,
   url: URL,
   res: ServerResponse
 ): Promise<void> {
@@ -273,7 +424,6 @@ async function handleApiJobsStream(
     const allJobs = await activeScraper.getJobsList();
     if (closed) return;
 
-    // First-level location & Tech/IT role filter before fetching per-job details
     const jobs = allJobs.filter((job) => {
       if (regionFilter === 'india' && !isIndiaLocation(job.location)) {
         return false;
@@ -384,7 +534,7 @@ async function handleApiJobsStream(
     if (!closed) {
       const fetchedAt = new Date().toISOString();
       if (portalId) {
-        await updatePortalStats(portalId, {
+        updatePortalStats(userId, portalId, {
           lastFetchedAt: fetchedAt,
           lastCount: matched,
         });
@@ -441,20 +591,23 @@ async function serveStatic(
   }
 }
 
-async function handleGetPortals(res: ServerResponse): Promise<void> {
-  const portals = await loadPortals();
+function handleGetPortals(userId: string, res: ServerResponse): void {
+  const portals = loadPortals(userId);
   sendJson(res, 200, {
     portals,
     storagePath: getPortalsFilePath(),
   });
 }
 
-async function resolvePortalEntry(raw: {
-  name?: unknown;
-  url?: unknown;
-  scraper?: unknown;
-  slug?: unknown;
-}) {
+async function resolvePortalEntry(
+  userId: string,
+  raw: {
+    name?: unknown;
+    url?: unknown;
+    scraper?: unknown;
+    slug?: unknown;
+  }
+) {
   const rawUrl = typeof raw.url === 'string' ? raw.url.trim() : '';
   const rawName = typeof raw.name === 'string' ? raw.name.trim() : '';
   const rawScraper = typeof raw.scraper === 'string' ? raw.scraper.trim() : '';
@@ -502,7 +655,7 @@ async function resolvePortalEntry(raw: {
     throw error;
   }
 
-  return upsertPortal({
+  return upsertPortal(userId, {
     name: resolvedName || resolvedSlug || rawUrl,
     url: normalizedUrl || rawName,
     scraper: resolvedScraper,
@@ -511,9 +664,11 @@ async function resolvePortalEntry(raw: {
 }
 
 async function handleCreatePortals(
+  userId: string,
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {
+  assertSameOrigin(req);
   const body = await readJsonBody(req);
   if (Array.isArray(body.entries)) {
     const saved = [];
@@ -521,7 +676,9 @@ async function handleCreatePortals(
     for (const item of body.entries) {
       if (!item || typeof item !== 'object') continue;
       try {
-        saved.push(await resolvePortalEntry(item as Record<string, unknown>));
+        saved.push(
+          await resolvePortalEntry(userId, item as Record<string, unknown>)
+        );
       } catch (error) {
         const label =
           typeof (item as Record<string, unknown>).url === 'string'
@@ -533,36 +690,39 @@ async function handleCreatePortals(
         });
       }
     }
-    if (saved.length > 0 && watcher.getState().config.enabled) {
-      void watcher.syncAllPortals();
+    if (saved.length > 0 && watcher.getState(userId).config.enabled) {
+      void watcher.syncUserPortals(userId);
     }
     sendJson(res, saved.length ? 201 : 400, { saved, errors });
     return;
   }
 
-  const portal = await resolvePortalEntry(body);
-  if (watcher.getState().config.enabled) {
-    void watcher.syncPortalById(portal.id);
+  const portal = await resolvePortalEntry(userId, body);
+  if (watcher.getState(userId).config.enabled) {
+    void watcher.syncPortalById(userId, portal.id);
   }
   sendJson(res, 201, { portal });
 }
 
 async function handleDeletePortal(
+  userId: string,
+  req: IncomingMessage,
   url: URL,
   res: ServerResponse
 ): Promise<void> {
+  assertSameOrigin(req);
   const id = url.searchParams.get('id')?.trim() ?? '';
   if (!id) throw new InputError('Portal id is required.');
-  const removed = await removePortal(id);
+  const removed = removePortal(userId, id);
   if (!removed) {
     sendJson(res, 404, { error: 'Portal not found.' });
     return;
   }
-  await watcher.removePortalSnapshot(id);
+  await watcher.removePortalSnapshot(userId, id);
   sendJson(res, 200, { ok: true, id });
 }
 
-function handleWatchEvents(res: ServerResponse): void {
+function handleWatchEvents(userId: string, res: ServerResponse): void {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -574,8 +734,8 @@ function handleWatchEvents(res: ServerResponse): void {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  writeEvent('state', watcher.getState());
-  const unsubscribe = watcher.subscribe((ev) => {
+  writeEvent('state', watcher.getState(userId));
+  const unsubscribe = watcher.subscribe(userId, (ev) => {
     writeEvent(ev.event, ev.data);
   });
   const keepAlive = setInterval(() => {
@@ -589,11 +749,13 @@ function handleWatchEvents(res: ServerResponse): void {
 }
 
 async function handleUpdateWatchConfig(
+  userId: string,
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {
+  assertSameOrigin(req);
   const body = await readJsonBody(req);
-  const state = await watcher.updateConfig({
+  const state = await watcher.updateConfig(userId, {
     ...(typeof body.enabled === 'boolean' ? { enabled: body.enabled } : {}),
     ...(typeof body.intervalMinutes === 'number'
       ? { intervalMinutes: body.intervalMinutes }
@@ -611,18 +773,20 @@ async function handleUpdateWatchConfig(
 }
 
 async function handleTriggerWatchSync(
+  userId: string,
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {
+  assertSameOrigin(req);
   const body = await readJsonBody(req);
   const portalId =
     typeof body.portalId === 'string' ? body.portalId.trim() : '';
   if (portalId) {
-    void watcher.syncPortalById(portalId);
+    void watcher.syncPortalById(userId, portalId);
   } else {
-    void watcher.syncAllPortals();
+    void watcher.syncUserPortals(userId);
   }
-  sendJson(res, 202, { ok: true, state: watcher.getState() });
+  sendJson(res, 202, { ok: true, state: watcher.getState(userId) });
 }
 
 async function handleRequest(
@@ -636,39 +800,76 @@ async function handleRequest(
   );
 
   try {
+    if (url.pathname === '/api/health' && method === 'GET') {
+      sendJson(res, 200, { ok: true, scrapers: scraperNames });
+      return;
+    }
+
+    if (url.pathname === '/api/auth/signup' && method === 'POST') {
+      await handleSignup(req, res);
+      return;
+    }
+    if (url.pathname === '/api/auth/login' && method === 'POST') {
+      await handleLogin(req, res);
+      return;
+    }
+    if (url.pathname === '/api/auth/logout' && method === 'POST') {
+      handleLogout(req, res);
+      return;
+    }
+    if (url.pathname === '/api/auth/me' && method === 'GET') {
+      const user = requireUser(req, res);
+      if (!user) return;
+      sendJson(res, 200, { user });
+      return;
+    }
+
     if (url.pathname === '/api/watch/state' && method === 'GET') {
-      sendJson(res, 200, watcher.getState());
+      const user = requireUser(req, res);
+      if (!user) return;
+      sendJson(res, 200, watcher.getState(user.id));
       return;
     }
     if (url.pathname === '/api/watch/events' && method === 'GET') {
-      handleWatchEvents(res);
+      const user = requireUser(req, res);
+      if (!user) return;
+      handleWatchEvents(user.id, res);
       return;
     }
     if (url.pathname === '/api/watch/config' && method === 'POST') {
-      await handleUpdateWatchConfig(req, res);
+      const user = requireUser(req, res);
+      if (!user) return;
+      await handleUpdateWatchConfig(user.id, req, res);
       return;
     }
     if (url.pathname === '/api/watch/sync' && method === 'POST') {
-      await handleTriggerWatchSync(req, res);
+      const user = requireUser(req, res);
+      if (!user) return;
+      await handleTriggerWatchSync(user.id, req, res);
       return;
     }
     if (url.pathname === '/api/watch/changes' && method === 'DELETE') {
-      const state = await watcher.clearChanges();
+      assertSameOrigin(req);
+      const user = requireUser(req, res);
+      if (!user) return;
+      const state = await watcher.clearChanges(user.id);
       sendJson(res, 200, { state });
       return;
     }
 
     if (url.pathname === '/api/portals') {
+      const user = requireUser(req, res);
+      if (!user) return;
       if (method === 'GET') {
-        await handleGetPortals(res);
+        handleGetPortals(user.id, res);
         return;
       }
       if (method === 'POST') {
-        await handleCreatePortals(req, res);
+        await handleCreatePortals(user.id, req, res);
         return;
       }
       if (method === 'DELETE') {
-        await handleDeletePortal(url, res);
+        await handleDeletePortal(user.id, req, url, res);
         return;
       }
       sendJson(res, 405, { error: 'Method not allowed' });
@@ -676,15 +877,18 @@ async function handleRequest(
     }
 
     if (url.pathname === '/api/bookmarks') {
+      const user = requireUser(req, res);
+      if (!user) return;
       if (method === 'GET') {
-        sendJson(res, 200, { bookmarks: await loadBookmarks() });
+        sendJson(res, 200, { bookmarks: loadBookmarks(user.id) });
         return;
       }
       if (method === 'POST') {
+        assertSameOrigin(req);
         const body = await readJsonBody(req);
         const key = typeof body.key === 'string' ? body.key.trim() : '';
         if (!key) throw new InputError('Bookmark key is required.');
-        const bookmarks = await setBookmarkState(key, {
+        const bookmarks = setBookmarkState(user.id, key, {
           ...(typeof body.saved === 'boolean' ? { saved: body.saved } : {}),
           ...(typeof body.applied === 'boolean'
             ? { applied: body.applied }
@@ -702,15 +906,15 @@ async function handleRequest(
       return;
     }
 
-    if (url.pathname === '/api/health') {
-      sendJson(res, 200, { ok: true, scrapers: scraperNames });
-      return;
-    }
     if (url.pathname === '/api/jobs/stream') {
-      await handleApiJobsStream(url, res);
+      const user = requireUser(req, res);
+      if (!user) return;
+      await handleApiJobsStream(user.id, url, res);
       return;
     }
     if (url.pathname === '/api/job') {
+      const user = requireUser(req, res);
+      if (!user) return;
       await handleApiJob(url, res);
       return;
     }
@@ -747,5 +951,5 @@ if (isMain) {
   const address = server.address();
   const actualPort =
     address && typeof address === 'object' ? address.port : DEFAULT_PORT;
-  console.log(`job-scraper UI running at http://${HOST}:${actualPort}`);
+  console.log(`Career Radar running at http://${HOST}:${actualPort}`);
 }

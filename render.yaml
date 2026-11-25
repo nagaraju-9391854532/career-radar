@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: career-radar
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 4321
+      - key: JOB_SCRAPER_DATA_DIR
+        value: /data
+      - key: AUTH_SECRET
+        generateValue: true
+    disk:
+      name: career-radar-data
+      mountPath: /data
+      sizeGB: 1
