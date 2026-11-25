@@ -30,7 +30,7 @@ import {
   isGoogleOAuthConfigured,
   resolveOAuthRedirectUri,
 } from './auth.ts';
-import { isTursoConfigured, type PublicUser } from './db.ts';
+import { dbListAllUsers, isTursoConfigured, type PublicUser } from './db.ts';
 import {
   extractJobRequirements,
   isIndiaLocation,
@@ -875,6 +875,19 @@ async function handleRequest(
 
     if (method !== 'GET') {
       sendJson(res, 405, { error: 'Method not allowed' });
+      return;
+    }
+
+    if (url.pathname === '/api/admin/users') {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+      if (!adminEmail || user.email.toLowerCase() !== adminEmail) {
+        sendJson(res, 403, { error: 'Forbidden.', code: 'FORBIDDEN' });
+        return;
+      }
+      const users = await dbListAllUsers();
+      sendJson(res, 200, { users });
       return;
     }
 

@@ -446,6 +446,39 @@ export function closeDb(): void {
   tursoInitializedUrl = null;
 }
 
+export async function dbListAllUsers(): Promise<
+  (PublicUser & { portalCount: number; lastSeen: string | null })[]
+> {
+  type Row = {
+    id: string;
+    email: string;
+    name: string;
+    avatar_url: string | null;
+    created_at: string;
+    portal_count: number;
+    last_seen: string | null;
+  };
+  const rows = await dbAll<Row>(
+    `SELECT u.id, u.email, u.name, u.avatar_url, u.created_at,
+            COUNT(DISTINCT p.id) AS portal_count,
+            MAX(s.created_at) AS last_seen
+     FROM users u
+     LEFT JOIN portals p ON p.user_id = u.id
+     LEFT JOIN sessions s ON s.user_id = u.id
+     GROUP BY u.id
+     ORDER BY u.created_at ASC`
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    name: r.name,
+    avatarUrl: r.avatar_url,
+    createdAt: r.created_at,
+    portalCount: Number(r.portal_count),
+    lastSeen: r.last_seen ?? null,
+  }));
+}
+
 export async function dbCountUsers(): Promise<number> {
   const row = await dbGet<{ count: number }>(
     'SELECT COUNT(*) AS count FROM users'
