@@ -98,6 +98,8 @@
                 type="button"
                 id="style-studio-btn"
                 class="btn btn-ghost"
+                title="Appearance styles"
+                aria-label="Appearance styles"
                 aria-expanded="false"
                 aria-controls="style-studio-popover">
                 <svg
@@ -173,6 +175,8 @@
               type="button"
               id="toggle-advanced"
               class="btn btn-ghost"
+              title="Board override"
+              aria-label="Board override"
               aria-expanded="false"
               aria-controls="advanced-panel"
               hidden>
@@ -199,13 +203,95 @@
               <span>Board Override</span>
             </button>
 
-            <div id="account-chip" class="account-chip" hidden>
-              <img id="account-avatar" class="account-avatar" alt="" hidden />
-              <span id="account-pill" class="brand-pill"></span>
+            <div id="account-chip" class="account-menu-wrap" hidden>
+              <button
+                type="button"
+                id="account-menu-btn"
+                class="account-trigger"
+                aria-expanded="false"
+                aria-controls="account-popover"
+                aria-label="Account menu">
+                <span class="account-avatar-wrap" aria-hidden="true">
+                  <img
+                    id="account-avatar"
+                    class="account-avatar"
+                    alt=""
+                    hidden
+                    referrerpolicy="no-referrer" />
+                  <span
+                    id="account-avatar-fallback"
+                    class="account-avatar-fallback"
+                    >U</span
+                  >
+                </span>
+                <span id="account-pill" class="account-name"></span>
+                <svg
+                  class="account-chevron"
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+
+              <div
+                id="account-popover"
+                class="account-popover"
+                hidden
+                role="dialog"
+                aria-label="Account details">
+                <div class="account-popover-header">
+                  <span class="account-avatar-wrap is-lg" aria-hidden="true">
+                    <img
+                      id="account-popover-avatar"
+                      class="account-avatar is-lg"
+                      alt=""
+                      hidden
+                      referrerpolicy="no-referrer" />
+                    <span
+                      id="account-popover-fallback"
+                      class="account-avatar-fallback is-lg"
+                      >U</span
+                    >
+                  </span>
+                  <div class="account-popover-meta">
+                    <div
+                      id="account-popover-name"
+                      class="account-popover-name"></div>
+                    <div
+                      id="account-popover-email"
+                      class="account-popover-email"></div>
+                  </div>
+                </div>
+                <div class="account-popover-divider"></div>
+                <button
+                  type="button"
+                  id="logout-btn"
+                  class="account-signout-btn">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                  </svg>
+                  <span>Sign Out</span>
+                </button>
+              </div>
             </div>
-            <button type="button" id="logout-btn" class="btn btn-ghost" hidden>
-              Sign Out
-            </button>
           </div>
         </div>
       </header>

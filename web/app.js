@@ -1,8 +1,19 @@
 const mainNavTabs = document.querySelector('#main-nav-tabs');
 const mainWorkspace = document.querySelector('#main-workspace');
 const accountChip = document.querySelector('#account-chip');
+const accountMenuBtn = document.querySelector('#account-menu-btn');
+const accountPopover = document.querySelector('#account-popover');
 const accountAvatar = document.querySelector('#account-avatar');
+const accountAvatarFallback = document.querySelector(
+  '#account-avatar-fallback'
+);
 const accountPill = document.querySelector('#account-pill');
+const accountPopoverAvatar = document.querySelector('#account-popover-avatar');
+const accountPopoverFallback = document.querySelector(
+  '#account-popover-fallback'
+);
+const accountPopoverName = document.querySelector('#account-popover-name');
+const accountPopoverEmail = document.querySelector('#account-popover-email');
 const logoutBtn = document.querySelector('#logout-btn');
 const authView = document.querySelector('#auth-view');
 const authErrorEl = document.querySelector('#auth-error');
@@ -2555,6 +2566,7 @@ function initStyleStudio() {
     styleStudioBtn.addEventListener('click', (event) => {
       event.stopPropagation();
       const willOpen = styleStudioPopover.hidden;
+      if (willOpen) closeAccountPopover();
       styleStudioPopover.hidden = !willOpen;
       styleStudioBtn.setAttribute('aria-expanded', String(willOpen));
     });
@@ -2723,6 +2735,62 @@ function initDesktopAlerts() {
   });
 }
 
+function closeAccountPopover() {
+  if (accountPopover) accountPopover.hidden = true;
+  if (accountMenuBtn) accountMenuBtn.setAttribute('aria-expanded', 'false');
+}
+
+function setAvatarImage(imgEl, fallbackEl, avatarUrl, initial) {
+  if (fallbackEl) fallbackEl.textContent = initial;
+  if (!imgEl) return;
+  if (!avatarUrl) {
+    imgEl.hidden = true;
+    imgEl.removeAttribute('src');
+    if (fallbackEl) fallbackEl.hidden = false;
+    return;
+  }
+  imgEl.onload = () => {
+    imgEl.hidden = false;
+    if (fallbackEl) fallbackEl.hidden = true;
+  };
+  imgEl.onerror = () => {
+    imgEl.hidden = true;
+    if (fallbackEl) fallbackEl.hidden = false;
+  };
+  imgEl.src = avatarUrl;
+}
+
+function initAccountMenu() {
+  if (!accountMenuBtn || !accountPopover) return;
+  accountMenuBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = accountPopover.hidden;
+    if (willOpen && styleStudioPopover && !styleStudioPopover.hidden) {
+      styleStudioPopover.hidden = true;
+      if (styleStudioBtn) styleStudioBtn.setAttribute('aria-expanded', 'false');
+    }
+    accountPopover.hidden = !willOpen;
+    accountMenuBtn.setAttribute('aria-expanded', String(willOpen));
+  });
+
+  document.addEventListener('click', (event) => {
+    if (
+      !accountPopover.hidden &&
+      !accountPopover.contains(event.target) &&
+      !accountMenuBtn.contains(event.target)
+    ) {
+      closeAccountPopover();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !accountPopover.hidden) {
+      closeAccountPopover();
+      accountMenuBtn.focus();
+    }
+  });
+}
+
 function enterSignedOutState(options = {}) {
   currentUser = null;
   if (watchEventSource) {
@@ -2735,13 +2803,14 @@ function enterSignedOutState(options = {}) {
   bookmarkMap = {};
   watchState = null;
   resetResultsState();
+  closeAccountPopover();
 
   if (mainWorkspace) mainWorkspace.hidden = true;
   if (mainNavTabs) mainNavTabs.hidden = true;
   if (toggleAdvancedBtn) toggleAdvancedBtn.hidden = true;
   if (accountChip) accountChip.hidden = true;
   if (accountAvatar) accountAvatar.hidden = true;
-  if (logoutBtn) logoutBtn.hidden = true;
+  if (accountPopoverAvatar) accountPopoverAvatar.hidden = true;
   if (authView) authView.hidden = false;
 
   if (oauthSetupHint) {
@@ -2770,23 +2839,31 @@ function enterSignedOutState(options = {}) {
 
 function enterSignedInWorkspace(user) {
   currentUser = user;
+  closeAccountPopover();
   if (authView) authView.hidden = true;
   if (mainWorkspace) mainWorkspace.hidden = false;
   if (mainNavTabs) mainNavTabs.hidden = false;
   if (toggleAdvancedBtn) toggleAdvancedBtn.hidden = false;
   if (accountChip) accountChip.hidden = false;
-  if (accountAvatar) {
-    if (user.avatarUrl) {
-      accountAvatar.src = user.avatarUrl;
-      accountAvatar.hidden = false;
-    } else {
-      accountAvatar.hidden = true;
-    }
-  }
+
+  const displayName = (user.name || user.email || 'Account').trim();
+  const initial = (displayName[0] || 'U').toUpperCase();
+  setAvatarImage(accountAvatar, accountAvatarFallback, user.avatarUrl, initial);
+  setAvatarImage(
+    accountPopoverAvatar,
+    accountPopoverFallback,
+    user.avatarUrl,
+    initial
+  );
+
   if (accountPill) {
-    accountPill.textContent = user.name || user.email;
+    accountPill.textContent = displayName;
+    accountPill.title = user.email
+      ? `${displayName} (${user.email})`
+      : displayName;
   }
-  if (logoutBtn) logoutBtn.hidden = false;
+  if (accountPopoverName) accountPopoverName.textContent = displayName;
+  if (accountPopoverEmail) accountPopoverEmail.textContent = user.email || '';
 
   switchTab('retrieve');
   refreshAllSlidingPills(false);
@@ -2849,6 +2926,7 @@ setInterval(() => {
 }, 1000);
 
 initStyleStudio();
+initAccountMenu();
 initSlidingPills();
 initSpotlightEffect();
 initMagneticButtons();

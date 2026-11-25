@@ -23,7 +23,7 @@ import {
   dbSaveSnapshot,
   dbSetSnapshotError,
   dbUpsertWatchConfig,
-  getDb,
+  initDatabase,
   type PersistedWatchConfig,
   type WatchExp,
   type WatchRegion,
@@ -294,7 +294,7 @@ export class PortalWatcher {
 
   async init(): Promise<void> {
     this.stopped = false;
-    getDb();
+    await initDatabase();
     this.startupTimer = setTimeout(() => {
       void this.runDueUsers();
     }, 1500);
@@ -317,9 +317,9 @@ export class PortalWatcher {
     this.jobDetailMemo.clear();
   }
 
-  getState(userId: string): WatcherPublicState {
-    const persisted = dbGetWatchConfig(userId);
-    const snapshotRows = dbLoadSnapshots(userId);
+  async getState(userId: string): Promise<WatcherPublicState> {
+    const persisted = await dbGetWatchConfig(userId);
+    const snapshotRows = await dbLoadSnapshots(userId);
     const snapshots: Record<string, PortalSnapshot> = {};
     for (const row of snapshotRows) {
       let jobs: WatchedJob[] = [];
@@ -353,7 +353,7 @@ export class PortalWatcher {
       lastSyncAt: persisted.lastSyncAt,
       nextSyncAt: persisted.nextSyncAt,
       snapshots,
-      changes: dbLoadChanges(userId, MAX_CHANGES),
+      changes: await dbLoadChanges(userId, MAX_CHANGES),
       isSyncing: Boolean(active),
       syncingPortalId: active?.syncingPortalId ?? null,
     };
@@ -392,7 +392,7 @@ export class PortalWatcher {
     userId: string,
     patch: Partial<WatchConfig> & { syncNow?: boolean }
   ): Promise<WatcherPublicState> {
-    const prev = dbGetWatchConfig(userId);
+    const prev = await dbGetWatchConfig(userId);
     const nextConfig = sanitizeConfig({ ...prev, ...patch });
     const filterChanged =
       prev.region !== nextConfig.region ||
@@ -409,8 +409,8 @@ export class PortalWatcher {
         : null,
     };
 
-    dbUpsertWatchConfig(userId, nextPersisted);
-    const state = this.getState(userId);
+    await dbUpsertWatchConfig(userId, nextPersisted);
+    const state = await this.getState(userId);
     this.emit(userId, { event: 'state', data: state });
 
     if (patch.syncNow || (nextConfig.enabled && filterChanged)) {
@@ -420,19 +420,19 @@ export class PortalWatcher {
   }
 
   async clearChanges(userId: string): Promise<WatcherPublicState> {
-    dbClearChanges(userId);
-    const state = this.getState(userId);
+    await dbClearChanges(userId);
+    const state = await this.getState(userId);
     this.emit(userId, { event: 'state', data: state });
     return state;
   }
 
   async removePortalSnapshot(userId: string, portalId: string): Promise<void> {
-    dbDeleteSnapshot(userId, portalId);
-    this.emit(userId, { event: 'state', data: this.getState(userId) });
+    await dbDeleteSnapshot(userId, portalId);
+    this.emit(userId, { event: 'state', data: await this.getState(userId) });
   }
 
   async syncPortalById(userId: string, portalId: string): Promise<void> {
-    const portals = loadPortals(userId);
+    const portals = await loadPortals(userId);
     const portal = portals.find((p) => p.id === portalId);
     if (!portal) return;
     const existing = this.activeUserSyncs.get(userId);
@@ -447,13 +447,13 @@ export class PortalWatcher {
     if (existing) {
       return existing.promise;
     }
-    const portals = loadPortals(userId);
+    const portals = await loadPortals(userId);
     return this.launchUserSync(userId, portals);
   }
 
   private async runDueUsers(): Promise<void> {
     if (this.stopped) return;
-    const dueIds = dbListDueUsers(new Date().toISOString());
+    const dueIds = await dbListDueUsers(new Date().toISOString());
     for (const userId of dueIds) {
       if (this.stopped) break;
       if (!this.activeUserSyncs.has(userId)) {
@@ -489,11 +489,11 @@ export class PortalWatcher {
     if (this.stopped) return;
     const startedAt = new Date().toISOString();
 
-    const allPortals = loadPortals(userId);
+    const allPortals = await loadPortals(userId);
     const activeIds = new Set(allPortals.map((p) => p.id));
-    for (const snap of dbLoadSnapshots(userId)) {
+    for (const snap of await dbLoadSnapshots(userId)) {
       if (!activeIds.has(snap.portalId)) {
-        dbDeleteSnapshot(userId, snap.portalId);
+        await dbDeleteSnapshot(userId, snap.portalId);
       }
     }
 
@@ -529,7 +529,7 @@ export class PortalWatcher {
       } catch (error) {
         if (this.stopped) return;
         const message = error instanceof Error ? error.message : String(error);
-        dbSetSnapshotError(userId, portal.id, message);
+        await dbSetSnapshotError(userId, portal.id, message);
         this.emit(userId, {
           event: 'sync_error',
           data: {
@@ -543,7 +543,7 @@ export class PortalWatcher {
 
     tracker.syncingPortalId = null;
     if (this.stopped) return;
-    const currentConfig = dbGetWatchConfig(userId);
+    const currentConfig = await dbGetWatchConfig(userId);
     const lastSyncAt = new Date().toISOString();
     const nextSyncAt = currentConfig.enabled
       ? new Date(
@@ -551,13 +551,13 @@ export class PortalWatcher {
         ).toISOString()
       : null;
 
-    dbUpsertWatchConfig(userId, {
+    await dbUpsertWatchConfig(userId, {
       ...currentConfig,
       lastSyncAt,
       nextSyncAt,
     });
 
-    const state = this.getState(userId);
+    const state = await this.getState(userId);
     this.emit(userId, {
       event: 'sync_done',
       data: {
@@ -655,7 +655,7 @@ export class PortalWatcher {
     updatedCount: number;
     removedCount: number;
   }> {
-    const { region, role, exp } = dbGetWatchConfig(userId);
+    const { region, role, exp } = await dbGetWatchConfig(userId);
     const listData = await this.getSharedBoardList(portal);
     const filteredList = listData.allJobs.filter((job) => {
       if (region === 'india' && !isIndiaLocation(job.location)) {
@@ -735,7 +735,7 @@ export class PortalWatcher {
       };
     }
 
-    const prevRow = dbLoadSnapshots(userId).find(
+    const prevRow = (await dbLoadSnapshots(userId)).find(
       (s) => s.portalId === portal.id
     );
     const prevSnapshot: PortalSnapshot | undefined = prevRow
@@ -771,7 +771,7 @@ export class PortalWatcher {
       lastError: null,
     };
 
-    dbSaveSnapshot(userId, {
+    await dbSaveSnapshot(userId, {
       portalId: snapshot.portalId,
       portalName: snapshot.portalName,
       scraper: snapshot.scraper,
@@ -783,9 +783,9 @@ export class PortalWatcher {
       lastError: null,
     });
     if (diff.changes.length > 0) {
-      dbInsertChanges(userId, diff.changes, MAX_CHANGES);
+      await dbInsertChanges(userId, diff.changes, MAX_CHANGES);
     }
-    updatePortalStats(userId, portal.id, {
+    await updatePortalStats(userId, portal.id, {
       lastFetchedAt: fetchedAt,
       lastCount: snapshot.jobs.length,
     });

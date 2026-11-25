@@ -21,11 +21,11 @@ export function getPortalsFilePath(): string {
   return getDatabasePath();
 }
 
-export function loadPortals(userId: string): StoredPortal[] {
+export async function loadPortals(userId: string): Promise<StoredPortal[]> {
   return dbLoadPortals(userId);
 }
 
-export function upsertPortal(
+export async function upsertPortal(
   userId: string,
   input: {
     name: string;
@@ -33,11 +33,11 @@ export function upsertPortal(
     scraper?: ScraperName;
     slug?: string;
   }
-): StoredPortal {
-  const existing = dbLoadPortals(userId).find(
+): Promise<StoredPortal> {
+  const existing = (await dbLoadPortals(userId)).find(
     (p) => p.url.trim().toLowerCase() === input.url.trim().toLowerCase()
   );
-  if (!existing && dbCountPortals(userId) >= MAX_PORTALS_PER_USER) {
+  if (!existing && (await dbCountPortals(userId)) >= MAX_PORTALS_PER_USER) {
     throw new Error(
       `Portal limit reached (max ${MAX_PORTALS_PER_USER} saved career portals per account).`
     );
@@ -52,28 +52,31 @@ export function upsertPortal(
   });
 }
 
-export function updatePortalStats(
+export async function updatePortalStats(
   userId: string,
   id: string,
   stats: { lastFetchedAt: string; lastCount: number }
-): void {
-  dbUpdatePortalStats(userId, id, stats);
+): Promise<void> {
+  await dbUpdatePortalStats(userId, id, stats);
 }
 
-export function removePortal(userId: string, id: string): boolean {
+export async function removePortal(
+  userId: string,
+  id: string
+): Promise<boolean> {
   return dbRemovePortal(userId, id);
 }
 
-export function loadBookmarks(
+export async function loadBookmarks(
   userId: string
-): Record<string, JobBookmarkState> {
+): Promise<Record<string, JobBookmarkState>> {
   return dbLoadBookmarks(userId);
 }
 
-export function setBookmarkState(
+export async function setBookmarkState(
   userId: string,
   key: string,
   patch: { saved?: boolean; applied?: boolean }
-): Record<string, JobBookmarkState> {
+): Promise<Record<string, JobBookmarkState>> {
   return dbSetBookmark(userId, key, patch);
 }

@@ -30,7 +30,7 @@ import {
   isGoogleOAuthConfigured,
   resolveOAuthRedirectUri,
 } from './auth.ts';
-import { type PublicUser } from './db.ts';
+import { isTursoConfigured, type PublicUser } from './db.ts';
 import {
   extractJobRequirements,
   isIndiaLocation,
@@ -187,11 +187,11 @@ function handleApiError(res: ServerResponse, error: unknown): void {
   sendJson(res, 500, { error: message, code: 'INTERNAL_ERROR' });
 }
 
-function requireUser(
+async function requireUser(
   req: IncomingMessage,
   res: ServerResponse
-): PublicUser | null {
-  const user = authenticateRequest(req);
+): Promise<PublicUser | null> {
+  const user = await authenticateRequest(req);
   if (!user) {
     sendJson(res, 401, {
       error: 'Authentication required.',
@@ -257,9 +257,12 @@ async function handleGoogleAuthCallback(
   }
 }
 
-function handleLogout(req: IncomingMessage, res: ServerResponse): void {
+async function handleLogout(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
   assertSameOrigin(req);
-  const cookie = clearSessionCookie(req);
+  const cookie = await clearSessionCookie(req);
   sendJson(res, 200, { ok: true }, { 'Set-Cookie': cookie });
 }
 
@@ -539,8 +542,11 @@ async function serveStatic(
   }
 }
 
-function handleGetPortals(userId: string, res: ServerResponse): void {
-  const portals = loadPortals(userId);
+async function handleGetPortals(
+  userId: string,
+  res: ServerResponse
+): Promise<void> {
+  const portals = await loadPortals(userId);
   sendJson(res, 200, {
     portals,
     storagePath: getPortalsFilePath(),
@@ -638,7 +644,7 @@ async function handleCreatePortals(
         });
       }
     }
-    if (saved.length > 0 && watcher.getState(userId).config.enabled) {
+    if (saved.length > 0 && (await watcher.getState(userId)).config.enabled) {
       void watcher.syncUserPortals(userId);
     }
     sendJson(res, saved.length ? 201 : 400, { saved, errors });
@@ -646,7 +652,7 @@ async function handleCreatePortals(
   }
 
   const portal = await resolvePortalEntry(userId, body);
-  if (watcher.getState(userId).config.enabled) {
+  if ((await watcher.getState(userId)).config.enabled) {
     void watcher.syncPortalById(userId, portal.id);
   }
   sendJson(res, 201, { portal });
@@ -661,7 +667,7 @@ async function handleDeletePortal(
   assertSameOrigin(req);
   const id = url.searchParams.get('id')?.trim() ?? '';
   if (!id) throw new InputError('Portal id is required.');
-  const removed = removePortal(userId, id);
+  const removed = await removePortal(userId, id);
   if (!removed) {
     sendJson(res, 404, { error: 'Portal not found.' });
     return;
@@ -670,7 +676,12 @@ async function handleDeletePortal(
   sendJson(res, 200, { ok: true, id });
 }
 
-function handleWatchEvents(userId: string, res: ServerResponse): void {
+async function handleWatchEvents(
+  userId: string,
+  res: ServerResponse
+): Promise<void> {
+  const initialState = await watcher.getState(userId);
+  if (res.writableEnded) return;
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -682,7 +693,7 @@ function handleWatchEvents(userId: string, res: ServerResponse): void {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  writeEvent('state', watcher.getState(userId));
+  writeEvent('state', initialState);
   const unsubscribe = watcher.subscribe(userId, (ev) => {
     writeEvent(ev.event, ev.data);
   });
@@ -734,7 +745,7 @@ async function handleTriggerWatchSync(
   } else {
     void watcher.syncUserPortals(userId);
   }
-  sendJson(res, 202, { ok: true, state: watcher.getState(userId) });
+  sendJson(res, 202, { ok: true, state: await watcher.getState(userId) });
 }
 
 async function handleRequest(
@@ -750,7 +761,11 @@ async function handleRequest(
 
   try {
     if (url.pathname === '/api/health' && method === 'GET') {
-      sendJson(res, 200, { ok: true, scrapers: scraperNames });
+      sendJson(res, 200, {
+        ok: true,
+        storage: isTursoConfigured() ? 'turso' : 'sqlite',
+        scrapers: scraperNames,
+      });
       return;
     }
 
@@ -763,11 +778,11 @@ async function handleRequest(
       return;
     }
     if (url.pathname === '/api/auth/logout' && method === 'POST') {
-      handleLogout(req, res);
+      await handleLogout(req, res);
       return;
     }
     if (url.pathname === '/api/auth/me' && method === 'GET') {
-      const user = authenticateRequest(req);
+      const user = await authenticateRequest(req);
       if (!user) {
         sendJson(res, 401, {
           error: 'Authentication required.',
@@ -782,32 +797,32 @@ async function handleRequest(
     }
 
     if (url.pathname === '/api/watch/state' && method === 'GET') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
-      sendJson(res, 200, watcher.getState(user.id));
+      sendJson(res, 200, await watcher.getState(user.id));
       return;
     }
     if (url.pathname === '/api/watch/events' && method === 'GET') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
-      handleWatchEvents(user.id, res);
+      await handleWatchEvents(user.id, res);
       return;
     }
     if (url.pathname === '/api/watch/config' && method === 'POST') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       await handleUpdateWatchConfig(user.id, req, res);
       return;
     }
     if (url.pathname === '/api/watch/sync' && method === 'POST') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       await handleTriggerWatchSync(user.id, req, res);
       return;
     }
     if (url.pathname === '/api/watch/changes' && method === 'DELETE') {
       assertSameOrigin(req);
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       const state = await watcher.clearChanges(user.id);
       sendJson(res, 200, { state });
@@ -815,10 +830,10 @@ async function handleRequest(
     }
 
     if (url.pathname === '/api/portals') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       if (method === 'GET') {
-        handleGetPortals(user.id, res);
+        await handleGetPortals(user.id, res);
         return;
       }
       if (method === 'POST') {
@@ -834,10 +849,10 @@ async function handleRequest(
     }
 
     if (url.pathname === '/api/bookmarks') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       if (method === 'GET') {
-        sendJson(res, 200, { bookmarks: loadBookmarks(user.id) });
+        sendJson(res, 200, { bookmarks: await loadBookmarks(user.id) });
         return;
       }
       if (method === 'POST') {
@@ -845,7 +860,7 @@ async function handleRequest(
         const body = await readJsonBody(req);
         const key = typeof body.key === 'string' ? body.key.trim() : '';
         if (!key) throw new InputError('Bookmark key is required.');
-        const bookmarks = setBookmarkState(user.id, key, {
+        const bookmarks = await setBookmarkState(user.id, key, {
           ...(typeof body.saved === 'boolean' ? { saved: body.saved } : {}),
           ...(typeof body.applied === 'boolean'
             ? { applied: body.applied }
@@ -864,13 +879,13 @@ async function handleRequest(
     }
 
     if (url.pathname === '/api/jobs/stream') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       await handleApiJobsStream(user.id, url, res);
       return;
     }
     if (url.pathname === '/api/job') {
-      const user = requireUser(req, res);
+      const user = await requireUser(req, res);
       if (!user) return;
       await handleApiJob(url, res);
       return;

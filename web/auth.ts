@@ -128,15 +128,20 @@ function formatCookie(
   return parts.join('; ');
 }
 
-export function issueSessionCookie(
+export async function issueSessionCookie(
   userId: string,
   req: IncomingMessage
-): string {
+): Promise<string> {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_MS).toISOString();
   const rawToken = randomBytes(32).toString('base64url');
-  dbPurgeExpiredSessions(now.toISOString());
-  dbCreateSession(hashToken(rawToken), userId, expiresAt, now.toISOString());
+  await dbPurgeExpiredSessions(now.toISOString());
+  await dbCreateSession(
+    hashToken(rawToken),
+    userId,
+    expiresAt,
+    now.toISOString()
+  );
 
   return formatCookie(
     SESSION_COOKIE_NAME,
@@ -146,19 +151,23 @@ export function issueSessionCookie(
   );
 }
 
-export function clearSessionCookie(req: IncomingMessage): string {
+export async function clearSessionCookie(
+  req: IncomingMessage
+): Promise<string> {
   const cookies = parseCookies(req);
   const tokenVal = cookies[SESSION_COOKIE_NAME];
   if (tokenVal) {
     const rawToken = verifySignedValue(tokenVal);
     if (rawToken) {
-      dbDeleteSession(hashToken(rawToken));
+      await dbDeleteSession(hashToken(rawToken));
     }
   }
   return formatCookie(SESSION_COOKIE_NAME, '', 0, req);
 }
 
-export function authenticateRequest(req: IncomingMessage): PublicUser | null {
+export async function authenticateRequest(
+  req: IncomingMessage
+): Promise<PublicUser | null> {
   const cookies = parseCookies(req);
   const tokenVal = cookies[SESSION_COOKIE_NAME];
   if (!tokenVal) return null;
@@ -351,7 +360,7 @@ export async function completeGoogleAuthCallback(
     throw new Error('Google account email is not verified.');
   }
 
-  const { user, isNewFirstUser } = dbUpsertGoogleUser({
+  const { user, isNewFirstUser } = await dbUpsertGoogleUser({
     googleSub: profile.sub,
     email: profile.email,
     name: profile.name || profile.email.split('@')[0] || 'User',
@@ -359,10 +368,10 @@ export async function completeGoogleAuthCallback(
   });
 
   if (isNewFirstUser) {
-    dbImportLegacySingleUserFiles(user.id);
+    await dbImportLegacySingleUserFiles(user.id);
   }
 
-  const sessionCookie = issueSessionCookie(user.id, req);
+  const sessionCookie = await issueSessionCookie(user.id, req);
   return { user, sessionCookie, clearStateCookie };
 }
 

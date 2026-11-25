@@ -279,28 +279,33 @@ button,
 }
 
 .topbar-inner {
-  max-width: 1240px;
+  position: relative;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 12px 24px;
+  padding: 10px 24px;
+  min-height: 62px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 16px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .brand-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 11px;
   background: linear-gradient(
     135deg,
     var(--color-accent-soft),
@@ -319,22 +324,25 @@ button,
 .brand-text {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 7px;
+  white-space: nowrap;
 }
 
 .brand-name {
   font-family: var(--heading-font);
   font-weight: 800;
-  font-size: 1.08rem;
+  font-size: 1.05rem;
   letter-spacing: -0.025em;
+  white-space: nowrap;
 }
 
 .brand-handwritten {
   font-family: var(--font-script);
-  font-size: 1.25rem;
+  font-size: 1.18rem;
   font-weight: 600;
   color: var(--color-accent);
   line-height: 1;
+  white-space: nowrap;
   transform: rotate(-2deg);
 }
 
@@ -347,12 +355,22 @@ button,
   background: var(--color-muted);
   color: var(--color-muted-foreground);
   border: 1px solid var(--color-border);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.topbar-actions .btn-ghost {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.83rem;
 }
 
 /* ---------- Style Studio Popover ---------- */
@@ -470,11 +488,14 @@ button,
 .nav-tabs {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   padding: 4px;
   border-radius: 12px;
   background: var(--color-muted);
   border: 1px solid var(--color-border);
   gap: 4px;
+  white-space: nowrap;
 }
 
 .sliding-pill {
@@ -506,14 +527,16 @@ button,
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   border: 0;
   background: transparent;
   color: var(--color-muted-foreground);
-  padding: 7px 15px;
+  padding: 6px 13px;
   border-radius: 9px;
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition:
     color 0.2s ease,
     transform 0.16s var(--ease-spring);
@@ -1094,7 +1117,7 @@ button,
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   gap: var(--space-3);
   margin-top: var(--space-3);
 }
@@ -1906,7 +1929,7 @@ button,
 
 .portals-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: var(--space-3);
   margin-top: var(--space-3);
 }
@@ -2028,7 +2051,7 @@ button,
 
 .portal-manage-info {
   min-width: 0;
-  flex: 1 1 300px;
+  flex: 1 1 220px;
 }
 
 .portal-manage-title {
@@ -2488,22 +2511,185 @@ button,
   line-height: 1.15;
 }
 
-.account-chip {
+.account-menu-wrap {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  flex-shrink: 0;
 }
 
-.account-chip[hidden] {
+.account-menu-wrap[hidden] {
   display: none;
 }
 
-.account-avatar {
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 999px;
+  background: var(--color-card-solid);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-foreground);
+  font-size: 0.83rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px -4px rgba(0, 0, 0, 0.12);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.18s var(--ease-spring),
+    box-shadow 0.2s ease;
+}
+
+.account-trigger:hover,
+.account-trigger[aria-expanded='true'] {
+  border-color: var(--color-accent);
+  box-shadow: 0 6px 16px -6px var(--color-accent-glow);
+}
+
+.account-trigger:hover {
+  transform: translateY(-1px);
+}
+
+.account-avatar-wrap {
+  position: relative;
   width: 26px;
   height: 26px;
   border-radius: 999px;
-  object-fit: cover;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
   border: 1px solid var(--color-border-strong);
+}
+
+.account-avatar-wrap.is-lg {
+  width: 38px;
+  height: 38px;
+}
+
+.account-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.account-avatar[hidden] {
+  display: none;
+}
+
+.account-avatar-fallback {
+  font-family: var(--heading-font);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.account-avatar-fallback.is-lg {
+  font-size: 0.96rem;
+}
+
+.account-name {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+.account-chevron {
+  color: var(--color-muted-foreground);
+  flex-shrink: 0;
+  transition: transform 0.22s var(--ease-spring);
+}
+
+.account-trigger[aria-expanded='true'] .account-chevron {
+  transform: rotate(180deg);
+}
+
+.account-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 270px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  background: var(--color-card-solid);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-elevated);
+  z-index: 65;
+  animation: popoverReveal 0.22s var(--ease-out-expo) both;
+}
+
+.account-popover[hidden] {
+  display: none;
+}
+
+.account-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 4px 4px 6px;
+}
+
+.account-popover-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.account-popover-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-foreground);
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.account-popover-email {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--color-muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-popover-divider {
+  height: 1px;
+  margin: 8px 0;
+  background: var(--color-border);
+}
+
+.account-signout-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-muted-foreground);
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.account-signout-btn:hover {
+  background: var(--color-destructive-soft);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: var(--color-destructive-text);
 }
 
 .oauth-actions {
@@ -2572,6 +2758,39 @@ button,
 }
 
 /* ---------- Responsive & Reduced Motion ---------- */
+@media (max-width: 1180px) {
+  .brand-handwritten {
+    display: none;
+  }
+
+  .topbar-inner {
+    gap: 12px;
+    padding: 10px 20px;
+  }
+
+  .account-name {
+    max-width: 135px;
+  }
+}
+
+@media (max-width: 980px) {
+  .topbar-inner {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .nav-tabs {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nav-tab {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 920px) {
   .workspace-grid.is-split {
     grid-template-columns: 1fr;
@@ -2585,35 +2804,218 @@ button,
 
 @media (max-width: 640px) {
   .topbar-inner {
-    flex-wrap: wrap;
-    padding: 12px 16px;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .brand-pill {
+    display: none;
+  }
+
+  .topbar-actions .btn-ghost span {
+    display: none;
+  }
+
+  .topbar-actions .btn-ghost {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0;
+  }
+
+  .studio-wrap,
+  .account-menu-wrap {
+    position: static;
+  }
+
+  .studio-popover,
+  .account-popover {
+    top: calc(100% + 6px);
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+  }
+
+  .account-name {
+    max-width: 100px;
+  }
+
+  .auth-shell {
+    margin: 24px auto 48px;
+    padding: 0 14px;
+  }
+
+  .auth-card {
+    padding: 22px 18px;
   }
 
   .container {
-    padding: 24px 16px 72px;
+    padding: 20px 14px 64px;
+  }
+
+  .command-card {
+    padding: 16px;
+  }
+
+  .strip-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  .watch-interval-wrap,
+  .watch-select {
+    width: 100%;
+  }
+
+  #goto-portals-btn {
+    grid-column: 1 / -1;
   }
 
   .command-input-row {
     flex-direction: column;
   }
 
-  .btn-accent {
+  .btn-accent,
+  .sub-card-actions .btn-accent {
     width: 100%;
+  }
+
+  .prefilter-bar {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .prefilter-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .prefilter-group .segmented {
+    width: 100%;
+    display: flex;
+  }
+
+  .prefilter-group .seg-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 0.76rem;
+    white-space: nowrap;
+    text-align: center;
   }
 
   .prefilter-toggle-group {
     margin-left: 0;
   }
 
+  .filter-search-wrap {
+    flex: 1 1 100%;
+  }
+
+  .filter-select-wrap {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 130px;
+  }
+
   .view-controls {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: space-between;
+    gap: 8px;
     margin-left: 0;
   }
 
-  .studio-popover {
-    right: -40px;
-    width: min(310px, calc(100vw - 24px));
+  .view-controls .segmented {
+    flex: 1 1 100%;
+    display: flex;
+  }
+
+  .view-controls .seg-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 0.76rem;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .filter-count {
+    width: 100%;
+    text-align: right;
+    font-size: 0.75rem;
+  }
+
+  .company-header-card {
+    padding: 16px;
+  }
+
+  .toolbar-exports {
+    width: 100%;
+  }
+
+  .toolbar-exports .btn {
+    flex: 1 1 auto;
+  }
+
+  .drawer-header {
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .drawer-body {
+    padding: 16px;
+  }
+
+  .portal-manage-card {
+    padding: 14px 16px;
+  }
+
+  .portal-manage-actions {
+    width: 100%;
+  }
+
+  .portal-manage-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  .brand-name {
+    font-size: 0.96rem;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+  }
+
+  .topbar-actions .btn-ghost {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
+  .account-trigger {
+    height: 34px;
+    padding: 2px 8px 2px 3px;
+    gap: 6px;
+  }
+
+  .account-avatar-wrap {
+    width: 24px;
+    height: 24px;
+  }
+
+  .account-name {
+    max-width: 78px;
+    font-size: 0.78rem;
   }
 }
 
