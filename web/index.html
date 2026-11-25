@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="en" data-theme="paper" data-font-style="signature">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Career Radar — Live Tech &amp; Experience Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="ambient-canvas" aria-hidden="true">
+      <div class="ambient-orb orb-1"></div>
+      <div class="ambient-orb orb-2"></div>
+      <div class="ambient-orb orb-3"></div>
+      <div class="ambient-grid"></div>
+    </div>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-inner">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 3v4"></path>
+                <path d="M12 12l4.5-4.5"></path>
+              </svg>
+            </span>
+            <div class="brand-text">
+              <span class="brand-name">Career Radar</span>
+              <span class="brand-handwritten">live signal</span>
+            </div>
+            <span id="scraper-count-pill" class="brand-pill">14 boards</span>
+          </div>
+
+          <nav class="nav-tabs" role="tablist" aria-label="Workspace views">
+            <button
+              type="button"
+              id="tab-retrieve"
+              class="nav-tab is-active"
+              role="tab"
+              aria-selected="true"
+              aria-controls="panel-retrieve">
+              <span
+                id="watch-live-dot"
+                class="live-dot"
+                aria-hidden="true"></span>
+              <span>Live Monitor</span>
+            </button>
+            <button
+              type="button"
+              id="tab-portals"
+              class="nav-tab"
+              role="tab"
+              aria-selected="false"
+              aria-controls="panel-portals">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true">
+                <path
+                  d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path
+                  d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+              </svg>
+              <span>Career Portals</span>
+              <span id="portals-count-badge" class="tab-count">0</span>
+            </button>
+          </nav>
+
+          <div class="topbar-actions">
+            <div class="studio-wrap">
+              <button
+                type="button"
+                id="style-studio-btn"
+                class="btn btn-ghost"
+                aria-expanded="false"
+                aria-controls="style-studio-popover">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true">
+                  <circle
+                    cx="13.5"
+                    cy="6.5"
+                    r="0.5"
+                    fill="currentColor"></circle>
+                  <circle
+                    cx="17.5"
+                    cy="10.5"
+                    r="0.5"
+                    fill="currentColor"></circle>
+                  <circle
+                    cx="8.5"
+                    cy="7.5"
+                    r="0.5"
+                    fill="currentColor"></circle>
+                  <circle
+                    cx="6.5"
+                    cy="12.5"
+                    r="0.5"
+                    fill="currentColor"></circle>
+                  <path
+                    d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path>
+                </svg>
+                <span>Styles</span>
+              </button>
+
+              <div
+                id="style-studio-popover"
+                class="studio-popover"
+                hidden
+                role="dialog"
+                aria-label="Appearance styles">
+                <div class="studio-section">
+                  <div class="studio-label-row">
+                    <span class="studio-label">Theme</span>
+                    <span class="studio-script-hint">Signature Editorial</span>
+                  </div>
+                  <div class="theme-grid">
+                    <button
+                      type="button"
+                      class="theme-swatch is-active"
+                      data-theme-choice="paper"
+                      aria-pressed="true">
+                      <span class="swatch-dot swatch-paper"></span>
+                      <span>Atelier Paper</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="theme-swatch"
+                      data-theme-choice="dark"
+                      aria-pressed="false">
+                      <span class="swatch-dot swatch-dark"></span>
+                      <span>Dark Mode</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="toggle-advanced"
+              class="btn btn-ghost"
+              aria-expanded="false"
+              aria-controls="advanced-panel">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true">
+                <line x1="4" y1="21" x2="4" y2="14"></line>
+                <line x1="4" y1="10" x2="4" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12" y2="3"></line>
+                <line x1="20" y1="21" x2="20" y2="16"></line>
+                <line x1="20" y1="12" x2="20" y2="3"></line>
+                <line x1="1" y1="14" x2="7" y2="14"></line>
+                <line x1="9" y1="8" x2="15" y2="8"></line>
+                <line x1="17" y1="16" x2="23" y2="16"></line>
+              </svg>
+              <span>Board Override</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="container">
+        <section
+          id="status-banner"
+          class="status-banner"
+          hidden
+          role="status"
+          aria-live="polite"></section>
+
+        <!-- TAB 1: LIVE MONITOR -->
+        <section
+          id="panel-retrieve"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="tab-retrieve">
+          <div class="hero-copy animate-enter">
+            <div class="hero-kicker">
+              <span class="kicker-dot"></span>
+              <span class="kicker-script">always watching, zero clicks</span>
+            </div>
+            <h1>
+              Live Career
+              <span class="hero-highlight"
+                >Monitor<svg
+                  class="hand-underline"
+                  viewBox="0 0 210 16"
+                  fill="none"
+                  aria-hidden="true">
+                  <path
+                    d="M3 11.5C52 4.5 138 2.5 207 9.5"
+                    stroke="currentColor"
+                    stroke-width="3.2"
+                    stroke-linecap="round" /></svg
+              ></span>
+              <span class="hero-sub-serif">for tech roles</span>
+            </h1>
+            <p>
+              Saved career portals sync automatically in the background and push
+              tech stacks, experience brackets, and new openings to your feed in
+              real time.
+            </p>
+          </div>
+
+          <section
+            id="saved-portals-retrieve"
+            class="command-card portals-strip-card spotlight-card animate-enter"
+            style="--enter-delay: 60ms">
+            <div class="strip-head">
+              <div>
+                <div class="watch-title-row">
+                  <h2>Auto-Watch Portals</h2>
+                  <span id="watch-status-pill" class="tag tag-accent"
+                    >Auto-Watch: ON</span
+                  >
+                  <span class="script-annotation">background daemon</span>
+                </div>
+                <p id="watch-timing-text" class="field-hint">
+                  Checking saved career portals automatically on schedule.
+                </p>
+              </div>
+              <div class="strip-actions">
+                <label class="watch-interval-wrap">
+                  <span class="sr-only">Check interval</span>
+                  <select id="watch-interval-select" class="watch-select">
+                    <option value="1">Every 1 min</option>
+                    <option value="5">Every 5 min</option>
+                    <option value="15" selected>Every 15 min</option>
+                    <option value="30">Every 30 min</option>
+                    <option value="60">Every 60 min</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  id="watch-notify-btn"
+                  class="btn btn-secondary"
+                  aria-pressed="false">
+                  Alerts: Off
+                </button>
+                <button
+                  type="button"
+                  id="watch-toggle-btn"
+                  class="btn btn-secondary">
+                  Pause Watch
+                </button>
+                <button
+                  type="button"
+                  id="fetch-all-portals-btn"
+                  class="btn btn-accent-soft"
+                  hidden>
+                  Check Now
+                </button>
+                <button
+                  type="button"
+                  id="goto-portals-btn"
+                  class="btn btn-secondary">
+                  + Add / Manage Links
+                </button>
+              </div>
+            </div>
+
+            <div id="retrieve-portals-empty" class="portals-empty">
+              <span class="script-note-inline">Start here →</span>
+              No career portal links saved yet. Add links in the
+              <strong>Career Portals</strong> tab and they will auto-sync and
+              stay saved across restarts.
+            </div>
+            <div id="retrieve-portals-grid" class="portals-grid" hidden></div>
+          </section>
+
+          <form
+            id="search-form"
+            class="command-card sub-card spotlight-card animate-enter"
+            style="--enter-delay: 120ms"
+            novalidate>
+            <div class="command-input-row">
+              <div class="input-icon-wrap">
+                <svg
+                  class="input-icon"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <label for="company-input" class="sr-only"
+                  >Company job board URL or company name</label
+                >
+                <input
+                  id="company-input"
+                  name="q"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="Paste a career URL or company name (e.g. Google, https://careers-bmwtechworks.peoplestrong.com/job/joblist)"
+                  required />
+              </div>
+              <button id="submit-btn" type="submit" class="btn btn-accent">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span class="btn-label">Fetch Live Jobs</span>
+              </button>
+            </div>
+
+            <div
+              class="prefilter-bar"
+              aria-label="First-level retrieval filters">
+              <div class="prefilter-group">
+                <span class="chip-bar-label">Region</span>
+                <div
+                  class="segmented"
+                  role="group"
+                  aria-label="Retrieve region">
+                  <button
+                    type="button"
+                    id="pre-region-india"
+                    class="seg-btn is-active"
+                    aria-pressed="true">
+                    India only
+                  </button>
+                  <button
+                    type="button"
+                    id="pre-region-all"
+                    class="seg-btn"
+                    aria-pressed="false">
+                    All regions
+                  </button>
+                </div>
+              </div>
+
+              <div class="prefilter-group">
+                <span class="chip-bar-label">Experience</span>
+                <div
+                  class="segmented"
+                  role="group"
+                  aria-label="Retrieve experience">
+                  <button
+                    type="button"
+                    id="pre-exp-0-5"
+                    class="seg-btn is-active"
+                    aria-pressed="true">
+                    0–5 yrs
+                  </button>
+                  <button
+                    type="button"
+                    id="pre-exp-0-2"
+                    class="seg-btn"
+                    aria-pressed="false">
+                    0–2 yrs
+                  </button>
+                  <button
+                    type="button"
+                    id="pre-exp-all"
+                    class="seg-btn"
+                    aria-pressed="false">
+                    All experience
+                  </button>
+                </div>
+              </div>
+
+              <div class="prefilter-group">
+                <span class="chip-bar-label">Role focus</span>
+                <div class="segmented" role="group" aria-label="Role type">
+                  <button
+                    type="button"
+                    id="pre-role-tech"
+                    class="seg-btn is-active"
+                    aria-pressed="true">
+                    Tech &amp; IT only
+                  </button>
+                  <button
+                    type="button"
+                    id="pre-role-all"
+                    class="seg-btn"
+                    aria-pressed="false">
+                    All roles
+                  </button>
+                </div>
+              </div>
+
+              <div class="prefilter-group prefilter-toggle-group">
+                <label class="toggle-check">
+                  <input id="live-fresh-checkbox" type="checkbox" checked />
+                  <span>Live fetch (bypass cache)</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="chip-bar">
+              <span class="chip-bar-label">Quick Try</span>
+              <div
+                class="chip-group"
+                role="group"
+                aria-label="Example job boards">
+                <button type="button" class="chip" data-query="Google">
+                  Google
+                </button>
+                <button
+                  type="button"
+                  class="chip"
+                  data-query="https://careers-bmwtechworks.peoplestrong.com/job/joblist">
+                  BMW TechWorks (PeopleStrong)
+                </button>
+                <button type="button" class="chip" data-query="Airbnb">
+                  Airbnb
+                </button>
+                <button
+                  type="button"
+                  class="chip"
+                  data-query="https://jobs.ashbyhq.com/zapier">
+                  jobs.ashbyhq.com/zapier
+                </button>
+              </div>
+            </div>
+
+            <div id="advanced-panel" class="sub-panel" hidden>
+              <div class="form-grid">
+                <label class="field">
+                  <span>Scraper (optional)</span>
+                  <select id="scraper-select" name="scraper">
+                    <option value="">Auto-detect from input</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Board slug (optional)</span>
+                  <input
+                    id="slug-input"
+                    name="slug"
+                    type="text"
+                    placeholder="e.g. airbnb or careers-bmwtechworks"
+                    autocomplete="off" />
+                </label>
+              </div>
+              <p class="field-hint">
+                Specify both scraper and slug to bypass automatic discovery and
+                query a board directly.
+              </p>
+            </div>
+          </form>
+
+          <section id="results-section" class="results-section" hidden>
+            <div class="kpi-strip">
+              <div class="kpi-card spotlight-card">
+                <span class="kpi-label">Matched Roles</span>
+                <strong id="kpi-matched" class="kpi-value">0</strong>
+                <span class="kpi-script">filtered live</span>
+              </div>
+              <div class="kpi-card spotlight-card">
+                <span class="kpi-label">Skills Extracted</span>
+                <strong id="kpi-techs" class="kpi-value">0</strong>
+                <span class="kpi-script">unique stack tags</span>
+              </div>
+              <div class="kpi-card spotlight-card">
+                <span class="kpi-label">Fresh Changes</span>
+                <strong id="kpi-changes" class="kpi-value">0</strong>
+                <span class="kpi-script">new &amp; updated</span>
+              </div>
+              <div class="kpi-card spotlight-card">
+                <span class="kpi-label">Watched Boards</span>
+                <strong id="kpi-portals" class="kpi-value">0</strong>
+                <span class="kpi-script">persisted links</span>
+              </div>
+            </div>
+
+            <div class="company-header-card spotlight-card">
+              <div class="company-identity">
+                <div class="company-title-row">
+                  <h2 id="company-name"></h2>
+                  <span id="scraper-badge" class="tag tag-accent"></span>
+                  <span id="slug-badge" class="tag tag-mono"></span>
+                </div>
+                <div class="stats-row">
+                  <span id="count-badge" class="stat-item"></span>
+                  <span id="loaded-stat" class="stat-item"></span>
+                  <span id="fetched-at-stat" class="stat-item stat-mono"></span>
+                  <span id="timing-badge" class="stat-item stat-mono"></span>
+                </div>
+              </div>
+
+              <div class="toolbar-exports">
+                <button
+                  type="button"
+                  id="copy-json-btn"
+                  class="btn btn-secondary">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true">
+                    <rect
+                      x="9"
+                      y="9"
+                      width="13"
+                      height="13"
+                      rx="2"
+                      ry="2"></rect>
+                    <path
+                      d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <span>Copy JSON</span>
+                </button>
+                <button
+                  type="button"
+                  id="download-md-btn"
+                  class="btn btn-secondary">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>Markdown</span>
+                </button>
+                <button
+                  type="button"
+                  id="download-csv-btn"
+                  class="btn btn-secondary">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>CSV</span>
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="progress-panel"
+              class="progress-card"
+              hidden
+              role="region"
+              aria-label="Job details fetch progress">
+              <div class="progress-header">
+                <span id="progress-text" class="progress-text"></span>
+                <button
+                  type="button"
+                  id="stop-stream-btn"
+                  class="btn btn-danger-soft">
+                  Stop Fetching
+                </button>
+              </div>
+              <div
+                id="progress-track"
+                class="progress-track"
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0">
+                <div id="progress-fill" class="progress-fill"></div>
+              </div>
+            </div>
+
+            <div
+              id="changes-panel"
+              class="changes-card"
+              hidden
+              aria-label="Recent position changes">
+              <div class="changes-head">
+                <div class="changes-title-row">
+                  <span class="chip-bar-label">Recent changes</span>
+                  <span
+                    id="changes-summary-badge"
+                    class="tag tag-accent"></span>
+                  <span class="script-annotation">live diff</span>
+                </div>
+                <button
+                  type="button"
+                  id="clear-changes-btn"
+                  class="btn btn-ghost btn-xs">
+                  Clear Log
+                </button>
+              </div>
+              <div id="changes-list" class="changes-list"></div>
+            </div>
+
+            <div
+              id="exp-filter-panel"
+              class="tech-summary-card"
+              hidden
+              aria-label="Filter by experience range and region">
+              <span class="chip-bar-label">Quick filters</span>
+              <div id="exp-filter-list" class="chip-group"></div>
+            </div>
+
+            <div
+              id="top-tech-panel"
+              class="tech-summary-card"
+              hidden
+              aria-label="Most requested technologies">
+              <span class="chip-bar-label">Top tech</span>
+              <div id="top-tech-list" class="chip-group"></div>
+            </div>
+
+            <div class="skills-match-bar">
+              <span class="chip-bar-label">My Skills</span>
+              <input
+                id="my-skills-input"
+                type="text"
+                placeholder="Type your stack to score &amp; highlight matches (e.g. TypeScript, React, Python, AWS)..."
+                autocomplete="off" />
+              <button
+                type="button"
+                id="clear-skills-btn"
+                class="btn btn-ghost btn-xs"
+                hidden>
+                Clear
+              </button>
+            </div>
+
+            <div class="controls-bar">
+              <div class="filter-search-wrap">
+                <svg
+                  class="input-icon"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <label for="filter-input" class="sr-only"
+                  >Filter openings by tech or experience</label
+                >
+                <input
+                  id="filter-input"
+                  type="search"
+                  placeholder="Filter by role, location, tech (Kafka, AWS), or experience... (press /)"
+                  autocomplete="off" />
+              </div>
+
+              <div class="filter-select-wrap">
+                <label for="location-select" class="sr-only"
+                  >Filter by location</label
+                >
+                <select id="location-select">
+                  <option value="">All locations</option>
+                </select>
+              </div>
+
+              <div class="filter-select-wrap">
+                <label for="sort-select" class="sr-only">Sort order</label>
+                <select id="sort-select">
+                  <option value="exp-asc">Experience: Low → High</option>
+                  <option value="exp-desc">Experience: High → Low</option>
+                  <option value="skill-match">Best Skill Match</option>
+                  <option value="default">Board default order</option>
+                </select>
+              </div>
+
+              <div class="view-controls">
+                <div class="segmented" role="group" aria-label="View mode">
+                  <button
+                    type="button"
+                    id="mode-expanded-btn"
+                    class="seg-btn is-active"
+                    aria-pressed="true">
+                    All Details
+                  </button>
+                  <button
+                    type="button"
+                    id="mode-split-btn"
+                    class="seg-btn"
+                    aria-pressed="false">
+                    Split View
+                  </button>
+                  <button
+                    type="button"
+                    id="mode-compact-btn"
+                    class="seg-btn"
+                    aria-pressed="false">
+                    Compact
+                  </button>
+                </div>
+                <span id="filter-count" class="filter-count"></span>
+              </div>
+            </div>
+
+            <div id="workspace-grid" class="workspace-grid">
+              <div id="jobs-list" class="jobs-list" role="list"></div>
+              <aside
+                id="split-inspector"
+                class="split-inspector"
+                hidden
+                aria-label="Selected job details">
+                <div id="split-inspector-inner" class="split-inspector-inner">
+                  <p class="empty-inspector">
+                    Select any opening from the list to inspect its required
+                    tech and experience.
+                  </p>
+                </div>
+              </aside>
+            </div>
+
+            <div id="empty-filter" class="empty-state" hidden>
+              <p>No openings match your current filter.</p>
+              <button
+                type="button"
+                id="clear-filters-btn"
+                class="btn btn-secondary">
+                Clear Filters
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <!-- TAB 2: CAREER PORTALS -->
+        <section
+          id="panel-portals"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="tab-portals"
+          hidden>
+          <div class="hero-copy animate-enter">
+            <div class="hero-kicker">
+              <span class="kicker-dot"></span>
+              <span class="kicker-script">saved permanently on disk</span>
+            </div>
+            <h1>
+              Career Portals
+              <span class="hero-highlight"
+                >Manager<svg
+                  class="hand-underline"
+                  viewBox="0 0 210 16"
+                  fill="none"
+                  aria-hidden="true">
+                  <path
+                    d="M3 11.5C52 4.5 138 2.5 207 9.5"
+                    stroke="currentColor"
+                    stroke-width="3.2"
+                    stroke-linecap="round" /></svg
+              ></span>
+            </h1>
+            <p>
+              Add company career portal URLs here. Links persist across server
+              restarts (<code id="portals-storage-path" class="inline-code"
+                >career-portals.json</code
+              >) and sync automatically as soon as you add them.
+            </p>
+          </div>
+
+          <form
+            id="portal-add-form"
+            class="command-card spotlight-card"
+            novalidate>
+            <div class="sub-card-head">
+              <div class="watch-title-row">
+                <h2>Add Career Portal Link</h2>
+                <span class="script-annotation">single or bulk paste</span>
+              </div>
+              <p class="field-hint">
+                Add a single portal with an optional display name, or paste
+                multiple career URLs (one per line) below.
+              </p>
+            </div>
+
+            <div class="form-grid">
+              <label class="field">
+                <span>Career Portal URL or Company Name</span>
+                <input
+                  id="portal-url-input"
+                  type="text"
+                  placeholder="https://careers-bmwtechworks.peoplestrong.com/job/joblist"
+                  autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Display Name (optional)</span>
+                <input
+                  id="portal-name-input"
+                  type="text"
+                  placeholder="e.g. BMW TechWorks"
+                  autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Scraper (optional override)</span>
+                <select id="portal-scraper-select">
+                  <option value="">Auto-detect from URL</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Slug (optional override)</span>
+                <input
+                  id="portal-slug-input"
+                  type="text"
+                  placeholder="e.g. careers-bmwtechworks"
+                  autocomplete="off" />
+              </label>
+            </div>
+
+            <label class="field bulk-field">
+              <span
+                >Or paste multiple career links / company names (one per
+                line)</span
+              >
+              <textarea
+                id="portal-bulk-input"
+                rows="4"
+                placeholder="https://www.google.com/about/careers/applications/jobs/results/&#10;https://careers-bmwtechworks.peoplestrong.com/job/joblist&#10;https://jobs.ashbyhq.com/zapier"></textarea>
+            </label>
+
+            <div class="sub-card-actions">
+              <button type="submit" id="save-portal-btn" class="btn btn-accent">
+                Save Career Portal(s)
+              </button>
+            </div>
+          </form>
+
+          <section class="saved-portals-section">
+            <div class="saved-section-head">
+              <div class="watch-title-row">
+                <h2>Saved Portals</h2>
+                <span class="script-annotation">auto-watched</span>
+              </div>
+              <button
+                type="button"
+                id="portals-tab-fetch-all"
+                class="btn btn-accent-soft"
+                hidden>
+                Check All in Live Monitor
+              </button>
+            </div>
+            <div id="portals-manage-empty" class="empty-state">
+              <p>
+                No career portals saved yet. Add a portal link above to save it
+                persistently.
+              </p>
+            </div>
+            <div id="portals-manage-list" class="portals-manage-list"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+    <aside
+      id="job-drawer"
+      class="job-drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-hidden="true"
+      aria-labelledby="drawer-title"
+      hidden>
+      <div class="drawer-header">
+        <div class="drawer-heading-group">
+          <p id="drawer-meta" class="drawer-meta"></p>
+          <h2 id="drawer-title" class="drawer-title"></h2>
+        </div>
+        <div class="drawer-actions">
+          <a
+            id="drawer-external-link"
+            class="btn btn-accent-soft"
+            target="_blank"
+            rel="noopener noreferrer">
+            <span>Open Posting</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true">
+              <path
+                d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+          <button
+            type="button"
+            id="drawer-close"
+            class="btn btn-icon"
+            aria-label="Close job details">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="drawer-body" class="drawer-body"></div>
+    </aside>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "tags": ["-@knipignore"],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/platform/{node,browser}.ts",
+        "src/**/*.test.ts",
+        "src/scripts/*.ts",
+        "web/*.ts"
+      ],
+      "project": ["src/**/*.ts", "web/**/*.ts"]
+    }
+  }
+}

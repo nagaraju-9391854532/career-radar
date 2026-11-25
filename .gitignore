@@ -1,0 +1,12 @@
+.agents
+.codegraph
+.data
+.DS_Store
+.env
+.playwright-mcp
+.remember
+*dist*/
+node_modules
+settings.local.json
+TODO.md
+tsconfig.tsbuildinfo

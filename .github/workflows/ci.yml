@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # reads the version from `packageManager` in package.json
+      - uses: oven-sh/setup-bun@v2
+
+      - id: install
+        run: bun install --frozen-lockfile
+
+      # each check runs even if an earlier one failed, so one run reports all failures
+      - name: Lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun run lint
+      - name: Typecheck
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun run typecheck
+      - name: Knip
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun run knip
+      - name: Test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun run test
+      # builds only validate that the latest code builds; outputs are discarded
+      - name: Build
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bun run build

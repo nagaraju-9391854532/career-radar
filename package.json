@@ -1,0 +1,67 @@
+{
+  "name": "career-radar",
+  "version": "1.0.0",
+  "description": "Live career portal monitor, tech stack & experience extractor, and multi-board job scraper",
+  "keywords": [
+    "jobs",
+    "career-monitor",
+    "scraper",
+    "ats",
+    "greenhouse",
+    "ashby",
+    "lever",
+    "workday",
+    "peoplestrong"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "imports": {
+    "#platform": {
+      "job-scraper-source": {
+        "node": "./src/platform/node.ts",
+        "default": "./src/platform/browser.ts"
+      },
+      "node": "./dist/platform/node.js",
+      "default": "./dist/platform/browser.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "bin": {
+    "career-radar": "./dist/cli/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "cli": "bun src/cli/index.ts",
+    "web": "bun --conditions=job-scraper-source web/server.ts",
+    "// checks": "----------------------------",
+    "lint": "prettier --check src web package.json README.md knip.json",
+    "lint-fix": "prettier --write src web package.json README.md knip.json | grep -v ' (unchanged)' || true",
+    "typecheck": "tsc --noEmit",
+    "knip": "knip",
+    "static-checks": "bun run --parallel lint typecheck knip",
+    "// tests": "----------------------------",
+    "test": "bun test --isolate --conditions=job-scraper-source",
+    "check-boards": "bun --conditions=job-scraper-source src/scripts/checkBoards.ts",
+    "ci": "bun run --parallel static-checks test build",
+    "// build": "-----------------------------",
+    "bake-version": "bun src/scripts/bakeVersion.ts",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && bun run bake-version"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/node": "^22.18.0",
+    "knip": "^6.40.0",
+    "prettier": "^3.8.2",
+    "typescript": "^7.0.2"
+  }
+}
