@@ -1,9 +1,8 @@
 import {
+  createHash,
   createHmac,
   randomBytes,
-  scryptSync,
   timingSafeEqual,
-  createHash,
 } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { type IncomingMessage } from 'node:http';
@@ -14,17 +13,18 @@ import {
   dbCreateSession,
   dbDeleteSession,
   dbFindSessionUser,
+  dbImportLegacySingleUserFiles,
   dbPurgeExpiredSessions,
+  dbUpsertGoogleUser,
   type PublicUser,
 } from './db.ts';
 
 export const SESSION_COOKIE_NAME = 'cr_session';
+export const OAUTH_STATE_COOKIE_NAME = 'cr_oauth_state';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const AUTH_WINDOW_MS = 10 * 60 * 1000;
-const AUTH_MAX_ATTEMPTS = 25;
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 let cachedAuthSecret: string | null = null;
-const authAttemptsByIp = new Map<string, number[]>();
 
 function getAuthSecret(): string {
   const envSecret = process.env.AUTH_SECRET?.trim();
@@ -47,52 +47,38 @@ function getAuthSecret(): string {
   return generated;
 }
 
-export function hashPassword(password: string): string {
-  const salt = randomBytes(16).toString('hex');
-  const derived = scryptSync(password, salt, 64).toString('hex');
-  return `scrypt:${salt}:${derived}`;
-}
-
-export function verifyPassword(password: string, storedHash: string): boolean {
-  const parts = storedHash.split(':');
-  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
-  const [, salt, hexHash] = parts;
-  if (!salt || !hexHash) return false;
-  try {
-    const expected = Buffer.from(hexHash, 'hex');
-    const actual = scryptSync(password, salt, 64);
-    if (expected.length !== actual.length) return false;
-    return timingSafeEqual(expected, actual);
-  } catch {
-    return false;
-  }
+export function isGoogleOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_CLIENT_ID?.trim() &&
+    process.env.GOOGLE_CLIENT_SECRET?.trim()
+  );
 }
 
 function hashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('hex');
 }
 
-function signToken(rawToken: string): string {
+function signValue(payload: string): string {
   const sig = createHmac('sha256', getAuthSecret())
-    .update(rawToken)
+    .update(payload)
     .digest('base64url');
-  return `${rawToken}.${sig}`;
+  return `${payload}.${sig}`;
 }
 
-function verifySignedToken(cookieValue: string): string | null {
-  const dotIdx = cookieValue.indexOf('.');
+function verifySignedValue(cookieValue: string): string | null {
+  const dotIdx = cookieValue.lastIndexOf('.');
   if (dotIdx <= 0) return null;
-  const rawToken = cookieValue.slice(0, dotIdx);
+  const payload = cookieValue.slice(0, dotIdx);
   const sig = cookieValue.slice(dotIdx + 1);
-  if (!rawToken || !sig) return null;
+  if (!payload || !sig) return null;
 
   const expectedSig = createHmac('sha256', getAuthSecret())
-    .update(rawToken)
+    .update(payload)
     .digest('base64url');
   const a = Buffer.from(sig);
   const b = Buffer.from(expectedSig);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  return rawToken;
+  return payload;
 }
 
 export function parseCookies(req: IncomingMessage): Record<string, string> {
@@ -123,6 +109,25 @@ function isHttpsRequest(req: IncomingMessage): boolean {
   return Boolean((req.socket as { encrypted?: boolean }).encrypted);
 }
 
+function formatCookie(
+  name: string,
+  value: string,
+  maxAgeSeconds: number,
+  req: IncomingMessage
+): string {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (isHttpsRequest(req)) {
+    parts.push('Secure');
+  }
+  return parts.join('; ');
+}
+
 export function issueSessionCookie(
   userId: string,
   req: IncomingMessage
@@ -133,72 +138,232 @@ export function issueSessionCookie(
   dbPurgeExpiredSessions(now.toISOString());
   dbCreateSession(hashToken(rawToken), userId, expiresAt, now.toISOString());
 
-  const signed = signToken(rawToken);
-  const maxAge = Math.floor(SESSION_TTL_MS / 1000);
-  const parts = [
-    `${SESSION_COOKIE_NAME}=${encodeURIComponent(signed)}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    `Max-Age=${maxAge}`,
-  ];
-  if (isHttpsRequest(req)) {
-    parts.push('Secure');
-  }
-  return parts.join('; ');
+  return formatCookie(
+    SESSION_COOKIE_NAME,
+    signValue(rawToken),
+    Math.floor(SESSION_TTL_MS / 1000),
+    req
+  );
 }
 
 export function clearSessionCookie(req: IncomingMessage): string {
   const cookies = parseCookies(req);
   const tokenVal = cookies[SESSION_COOKIE_NAME];
   if (tokenVal) {
-    const rawToken = verifySignedToken(tokenVal);
+    const rawToken = verifySignedValue(tokenVal);
     if (rawToken) {
       dbDeleteSession(hashToken(rawToken));
     }
   }
-  const parts = [
-    `${SESSION_COOKIE_NAME}=`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Lax',
-    'Max-Age=0',
-  ];
-  if (isHttpsRequest(req)) {
-    parts.push('Secure');
-  }
-  return parts.join('; ');
+  return formatCookie(SESSION_COOKIE_NAME, '', 0, req);
 }
 
 export function authenticateRequest(req: IncomingMessage): PublicUser | null {
   const cookies = parseCookies(req);
   const tokenVal = cookies[SESSION_COOKIE_NAME];
   if (!tokenVal) return null;
-  const rawToken = verifySignedToken(tokenVal);
+  const rawToken = verifySignedValue(tokenVal);
   if (!rawToken) return null;
   return dbFindSessionUser(hashToken(rawToken), new Date().toISOString());
 }
 
-export function getClientIp(req: IncomingMessage): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0]!.trim();
-  }
-  return req.socket.remoteAddress || 'unknown';
+export function resolveOAuthRedirectUri(req: IncomingMessage): string {
+  const explicit = process.env.GOOGLE_REDIRECT_URI?.trim();
+  if (explicit) return explicit;
+  const publicOrigin = process.env.PUBLIC_ORIGIN?.trim().replace(/\/+$/, '');
+  if (publicOrigin) return `${publicOrigin}/api/auth/google/callback`;
+
+  const proto = isHttpsRequest(req) ? 'https' : 'http';
+  const host = req.headers.host || '127.0.0.1:4321';
+  return `${proto}://${host}/api/auth/google/callback`;
 }
 
-export function checkAuthRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const recent = (authAttemptsByIp.get(ip) ?? []).filter(
-    (t) => now - t < AUTH_WINDOW_MS
-  );
-  if (recent.length >= AUTH_MAX_ATTEMPTS) {
-    authAttemptsByIp.set(ip, recent);
-    return false;
+export function createGoogleAuthStart(req: IncomingMessage): {
+  authUrl: string;
+  stateCookie: string;
+} {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.'
+    );
   }
-  recent.push(now);
-  authAttemptsByIp.set(ip, recent);
-  return true;
+
+  const state = randomBytes(24).toString('base64url');
+  const codeVerifier = randomBytes(32).toString('base64url');
+  const codeChallenge = createHash('sha256')
+    .update(codeVerifier)
+    .digest('base64url');
+  const redirectUri = resolveOAuthRedirectUri(req);
+
+  const encodedStatePayload = Buffer.from(
+    JSON.stringify({
+      state,
+      codeVerifier,
+      redirectUri,
+      exp: Date.now() + OAUTH_STATE_TTL_MS,
+    }),
+    'utf8'
+  ).toString('base64url');
+
+  const stateCookie = formatCookie(
+    OAUTH_STATE_COOKIE_NAME,
+    signValue(encodedStatePayload),
+    Math.floor(OAUTH_STATE_TTL_MS / 1000),
+    req
+  );
+
+  const authParams = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    prompt: 'select_account',
+  });
+
+  return {
+    authUrl: `https://accounts.google.com/o/oauth2/v2/auth?${authParams.toString()}`,
+    stateCookie,
+  };
+}
+
+export interface GoogleProfile {
+  sub: string;
+  email: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+}
+
+export async function defaultGoogleExchange(params: {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+  clientId: string;
+  clientSecret: string;
+}): Promise<GoogleProfile> {
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code: params.code,
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+      redirect_uri: params.redirectUri,
+      grant_type: 'authorization_code',
+      code_verifier: params.codeVerifier,
+    }),
+  });
+  const tokenData = (await tokenRes.json()) as {
+    access_token?: string;
+    error?: string;
+    error_description?: string;
+  };
+  if (!tokenRes.ok || !tokenData.access_token) {
+    throw new Error(
+      tokenData.error_description ||
+        tokenData.error ||
+        'Google token exchange failed.'
+    );
+  }
+
+  const profileRes = await fetch(
+    'https://openidconnect.googleapis.com/v1/userinfo',
+    {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    }
+  );
+  const profile = (await profileRes.json()) as Partial<GoogleProfile>;
+  if (!profileRes.ok || !profile.sub || !profile.email) {
+    throw new Error('Could not read verified Google profile.');
+  }
+  return profile as GoogleProfile;
+}
+
+export async function completeGoogleAuthCallback(
+  req: IncomingMessage,
+  url: URL,
+  exchangeFn: typeof defaultGoogleExchange = defaultGoogleExchange
+): Promise<{
+  user: PublicUser;
+  sessionCookie: string;
+  clearStateCookie: string;
+}> {
+  const clearStateCookie = formatCookie(OAUTH_STATE_COOKIE_NAME, '', 0, req);
+  const oauthError = url.searchParams.get('error');
+  if (oauthError) {
+    throw new Error(`Google sign-in cancelled (${oauthError}).`);
+  }
+
+  const code = url.searchParams.get('code')?.trim();
+  const stateParam = url.searchParams.get('state')?.trim();
+  if (!code || !stateParam) {
+    throw new Error('Missing authorization code or state from Google.');
+  }
+
+  const cookies = parseCookies(req);
+  const signedState = cookies[OAUTH_STATE_COOKIE_NAME];
+  if (!signedState) {
+    throw new Error('OAuth state cookie missing or expired. Please try again.');
+  }
+  const encodedPayload = verifySignedValue(signedState);
+  if (!encodedPayload) {
+    throw new Error('Invalid OAuth state signature.');
+  }
+
+  const parsed = JSON.parse(
+    Buffer.from(encodedPayload, 'base64url').toString('utf8')
+  ) as {
+    state: string;
+    codeVerifier: string;
+    redirectUri: string;
+    exp: number;
+  };
+
+  if (Date.now() > parsed.exp) {
+    throw new Error('Google sign-in session expired. Please try again.');
+  }
+  const a = Buffer.from(stateParam);
+  const b = Buffer.from(parsed.state);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    throw new Error('OAuth state mismatch.');
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) {
+    throw new Error('Google OAuth credentials are not configured.');
+  }
+
+  const profile = await exchangeFn({
+    code,
+    codeVerifier: parsed.codeVerifier,
+    redirectUri: parsed.redirectUri,
+    clientId,
+    clientSecret,
+  });
+
+  if (profile.email_verified === false) {
+    throw new Error('Google account email is not verified.');
+  }
+
+  const { user, isNewFirstUser } = dbUpsertGoogleUser({
+    googleSub: profile.sub,
+    email: profile.email,
+    name: profile.name || profile.email.split('@')[0] || 'User',
+    avatarUrl: profile.picture ?? null,
+  });
+
+  if (isNewFirstUser) {
+    dbImportLegacySingleUserFiles(user.id);
+  }
+
+  const sessionCookie = issueSessionCookie(user.id, req);
+  return { user, sessionCookie, clearStateCookie };
 }
 
 export function isPrivateOrUnsafeHost(hostname: string): boolean {

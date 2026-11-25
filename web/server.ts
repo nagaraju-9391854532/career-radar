@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import {
   createServer,
   type IncomingMessage,
@@ -24,20 +23,14 @@ import {
 import {
   assertSafeExternalUrl,
   authenticateRequest,
-  checkAuthRateLimit,
   clearSessionCookie,
-  getClientIp,
-  hashPassword,
-  issueSessionCookie,
-  verifyPassword,
+  completeGoogleAuthCallback,
+  createGoogleAuthStart,
+  defaultGoogleExchange,
+  isGoogleOAuthConfigured,
+  resolveOAuthRedirectUri,
 } from './auth.ts';
-import {
-  dbCountUsers,
-  dbCreateUser,
-  dbFindUserByEmail,
-  dbImportLegacySingleUserFiles,
-  type PublicUser,
-} from './db.ts';
+import { type PublicUser } from './db.ts';
 import {
   extractJobRequirements,
   isIndiaLocation,
@@ -66,8 +59,6 @@ const MIME_TYPES: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
 };
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function sendJson(
   res: ServerResponse,
@@ -221,92 +212,49 @@ function assertSameOrigin(req: IncomingMessage): void {
   }
 }
 
-async function handleSignup(
-  req: IncomingMessage,
-  res: ServerResponse
-): Promise<void> {
-  assertSameOrigin(req);
-  if (!checkAuthRateLimit(getClientIp(req))) {
-    throw new InputError('Too many auth attempts. Please wait a bit.', 429);
+function redirect(
+  res: ServerResponse,
+  location: string,
+  cookies: string[] = []
+): void {
+  const headers: Record<string, string | string[]> = {
+    Location: location,
+    'Cache-Control': 'no-store',
+  };
+  if (cookies.length > 0) {
+    headers['Set-Cookie'] = cookies;
   }
-  const body = await readJsonBody(req);
-  const email =
-    typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const password = typeof body.password === 'string' ? body.password : '';
-  const rawName = typeof body.name === 'string' ? body.name.trim() : '';
-
-  if (!EMAIL_RE.test(email)) {
-    throw new InputError('Please enter a valid email address.');
-  }
-  if (password.length < 8) {
-    throw new InputError('Password must be at least 8 characters long.');
-  }
-  if (dbFindUserByEmail(email)) {
-    throw new InputError('An account with that email already exists.', 409);
-  }
-
-  const isFirstAccount = dbCountUsers() === 0;
-  const userId = randomUUID();
-  const name = rawName || email.split('@')[0] || 'User';
-  const createdAt = new Date().toISOString();
-
-  dbCreateUser({
-    id: userId,
-    email,
-    name: name.slice(0, 80),
-    passwordHash: hashPassword(password),
-    createdAt,
-  });
-
-  if (isFirstAccount) {
-    dbImportLegacySingleUserFiles(userId);
-  }
-
-  const cookie = issueSessionCookie(userId, req);
-  sendJson(
-    res,
-    201,
-    { user: { id: userId, email, name, createdAt } },
-    { 'Set-Cookie': cookie }
-  );
+  res.writeHead(302, headers);
+  res.end();
 }
 
-async function handleLogin(
+function handleGoogleAuthStart(
   req: IncomingMessage,
   res: ServerResponse
+): void {
+  try {
+    const { authUrl, stateCookie } = createGoogleAuthStart(req);
+    redirect(res, authUrl, [stateCookie]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    redirect(res, `/?auth_error=${encodeURIComponent(message)}`);
+  }
+}
+
+async function handleGoogleAuthCallback(
+  req: IncomingMessage,
+  url: URL,
+  res: ServerResponse,
+  googleExchange: typeof defaultGoogleExchange
 ): Promise<void> {
-  assertSameOrigin(req);
-  if (!checkAuthRateLimit(getClientIp(req))) {
-    throw new InputError('Too many auth attempts. Please wait a bit.', 429);
+  try {
+    const { sessionCookie, clearStateCookie } =
+      await completeGoogleAuthCallback(req, url, googleExchange);
+    redirect(res, '/', [sessionCookie, clearStateCookie]);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    redirect(res, `/?auth_error=${encodeURIComponent(message)}`);
   }
-  const body = await readJsonBody(req);
-  const email =
-    typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const password = typeof body.password === 'string' ? body.password : '';
-
-  if (!email || !password) {
-    throw new InputError('Email and password are required.');
-  }
-
-  const user = dbFindUserByEmail(email);
-  if (!user || !verifyPassword(password, user.passwordHash)) {
-    throw new InputError('Invalid email or password.', 401);
-  }
-
-  const cookie = issueSessionCookie(user.id, req);
-  sendJson(
-    res,
-    200,
-    {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        createdAt: user.createdAt,
-      },
-    },
-    { 'Set-Cookie': cookie }
-  );
 }
 
 function handleLogout(req: IncomingMessage, res: ServerResponse): void {
@@ -791,7 +739,8 @@ async function handleTriggerWatchSync(
 
 async function handleRequest(
   req: IncomingMessage,
-  res: ServerResponse
+  res: ServerResponse,
+  googleExchange: typeof defaultGoogleExchange = defaultGoogleExchange
 ): Promise<void> {
   const method = req.method ?? 'GET';
   const url = new URL(
@@ -805,12 +754,12 @@ async function handleRequest(
       return;
     }
 
-    if (url.pathname === '/api/auth/signup' && method === 'POST') {
-      await handleSignup(req, res);
+    if (url.pathname === '/api/auth/google' && method === 'GET') {
+      handleGoogleAuthStart(req, res);
       return;
     }
-    if (url.pathname === '/api/auth/login' && method === 'POST') {
-      await handleLogin(req, res);
+    if (url.pathname === '/api/auth/google/callback' && method === 'GET') {
+      await handleGoogleAuthCallback(req, url, res, googleExchange);
       return;
     }
     if (url.pathname === '/api/auth/logout' && method === 'POST') {
@@ -818,8 +767,16 @@ async function handleRequest(
       return;
     }
     if (url.pathname === '/api/auth/me' && method === 'GET') {
-      const user = requireUser(req, res);
-      if (!user) return;
+      const user = authenticateRequest(req);
+      if (!user) {
+        sendJson(res, 401, {
+          error: 'Authentication required.',
+          code: 'UNAUTHORIZED',
+          googleOAuthConfigured: isGoogleOAuthConfigured(),
+          redirectUri: resolveOAuthRedirectUri(req),
+        });
+        return;
+      }
       sendJson(res, 200, { user });
       return;
     }
@@ -924,10 +881,19 @@ async function handleRequest(
   }
 }
 
-export async function startServer(port = DEFAULT_PORT, host = HOST) {
+export interface StartServerOptions {
+  googleExchange?: typeof defaultGoogleExchange;
+}
+
+export async function startServer(
+  port = DEFAULT_PORT,
+  host = HOST,
+  options: StartServerOptions = {}
+) {
   await watcher.init();
+  const googleExchange = options.googleExchange ?? defaultGoogleExchange;
   const server = createServer((req, res) => {
-    void handleRequest(req, res);
+    void handleRequest(req, res, googleExchange);
   });
   server.on('close', () => {
     watcher.stop();

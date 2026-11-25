@@ -3,18 +3,11 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dataDir, type ScraperName } from '../src/index.ts';
 
-export interface DbUser {
-  id: string;
-  email: string;
-  name: string;
-  passwordHash: string;
-  createdAt: string;
-}
-
 export interface PublicUser {
   id: string;
   email: string;
   name: string;
+  avatarUrl: string | null;
   createdAt: string;
 }
 
@@ -94,7 +87,9 @@ export function getDb(): Database {
       id TEXT PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
+      google_sub TEXT UNIQUE,
+      avatar_url TEXT,
+      password_hash TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL
     );
 
@@ -175,6 +170,20 @@ export function getDb(): Database {
       PRIMARY KEY (user_id, job_key)
     );
   `);
+  const userCols = db
+    .query<{ name: string }, []>('PRAGMA table_info(users)')
+    .all()
+    .map((c) => c.name);
+  if (!userCols.includes('google_sub')) {
+    db.exec('ALTER TABLE users ADD COLUMN google_sub TEXT');
+    db.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub)'
+    );
+  }
+  if (!userCols.includes('avatar_url')) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+  }
+
   dbInstance = db;
   return db;
 }
@@ -193,36 +202,81 @@ export function dbCountUsers(): number {
   return row?.count ?? 0;
 }
 
-export function dbCreateUser(user: DbUser): void {
-  getDb()
-    .query(
-      'INSERT INTO users (id, email, name, password_hash, created_at) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run(user.id, user.email, user.name, user.passwordHash, user.createdAt);
-}
+export function dbUpsertGoogleUser(input: {
+  googleSub: string;
+  email: string;
+  name: string;
+  avatarUrl?: string | null;
+}): { user: PublicUser; isNewFirstUser: boolean } {
+  const db = getDb();
+  const cleanEmail = input.email.trim().toLowerCase();
+  const cleanName =
+    input.name.trim().slice(0, 80) || cleanEmail.split('@')[0] || 'User';
+  const avatar = input.avatarUrl?.trim() || null;
 
-export function dbFindUserByEmail(email: string): DbUser | null {
-  const row = getDb()
-    .query<
-      {
-        id: string;
-        email: string;
-        name: string;
-        password_hash: string;
-        created_at: string;
+  const existing =
+    db
+      .query<
+        {
+          id: string;
+          email: string;
+          name: string;
+          avatar_url: string | null;
+          created_at: string;
+        },
+        [string]
+      >(
+        'SELECT id, email, name, avatar_url, created_at FROM users WHERE google_sub = ?'
+      )
+      .get(input.googleSub) ??
+    db
+      .query<
+        {
+          id: string;
+          email: string;
+          name: string;
+          avatar_url: string | null;
+          created_at: string;
+        },
+        [string]
+      >(
+        'SELECT id, email, name, avatar_url, created_at FROM users WHERE email = ?'
+      )
+      .get(cleanEmail);
+
+  if (existing) {
+    db.query(
+      'UPDATE users SET google_sub = ?, email = ?, name = ?, avatar_url = ? WHERE id = ?'
+    ).run(input.googleSub, cleanEmail, cleanName, avatar, existing.id);
+    return {
+      user: {
+        id: existing.id,
+        email: cleanEmail,
+        name: cleanName,
+        avatarUrl: avatar,
+        createdAt: existing.created_at,
       },
-      [string]
-    >(
-      'SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?'
-    )
-    .get(email.trim().toLowerCase());
-  if (!row) return null;
+      isNewFirstUser: false,
+    };
+  }
+
+  const isFirst = dbCountUsers() === 0;
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  db.query(
+    `INSERT INTO users (id, email, name, google_sub, avatar_url, password_hash, created_at)
+     VALUES (?, ?, ?, ?, ?, '', ?)`
+  ).run(id, cleanEmail, cleanName, input.googleSub, avatar, createdAt);
+
   return {
-    id: row.id,
-    email: row.email,
-    name: row.name,
-    passwordHash: row.password_hash,
-    createdAt: row.created_at,
+    user: {
+      id,
+      email: cleanEmail,
+      name: cleanName,
+      avatarUrl: avatar,
+      createdAt,
+    },
+    isNewFirstUser: isFirst,
   };
 }
 
@@ -245,10 +299,16 @@ export function dbFindSessionUser(
 ): PublicUser | null {
   const row = getDb()
     .query<
-      { id: string; email: string; name: string; created_at: string },
+      {
+        id: string;
+        email: string;
+        name: string;
+        avatar_url: string | null;
+        created_at: string;
+      },
       [string, string]
     >(
-      `SELECT u.id, u.email, u.name, u.created_at
+      `SELECT u.id, u.email, u.name, u.avatar_url, u.created_at
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.expires_at > ?`
@@ -259,6 +319,7 @@ export function dbFindSessionUser(
     id: row.id,
     email: row.email,
     name: row.name,
+    avatarUrl: row.avatar_url,
     createdAt: row.created_at,
   };
 }
