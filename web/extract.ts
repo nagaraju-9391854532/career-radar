@@ -20,13 +20,6 @@ export function isIndiaLocation(location: string): boolean {
   return INDIA_LOCATION_RE.test(location);
 }
 
-/**
- * Titles that signal a fresher / entry-level role even when the job body
- * contains no explicit "N years" statement.
- */
-const FRESHER_TITLE_RE =
-  /\b(associate\s+sde|associate\s+software|associate\s+engineer|associate\s+developer|junior\s+(?:engineer|developer|sde)|entry[\s-]level|sde[\s-]?i\b|software\s+engineer\s+i\b|graduate\s+engineer|fresh(?:er|graduate)|intern(?:ship)?|trainee|apprentice)\b/i;
-
 const NON_TECH_TITLE_RE =
   /\b(product\s+specialist|product\s+manager|product\s+marketing|program\s+manager|project\s+manager|territory\s+manager|new\s+business|account\s+(?:executive|manager|strategist|coordinator|director)|sales(?:\s+development|\s+assist|\s+representative|\s+manager|\s+specialist|\s+engineer\s+intern)?|business\s+development|recruiter|recruiting|talent\s+(?:partner|acquisition|sourcer)|human\s+resources|\bhr\b|people\s+partner|legal|counsel|attorney|policy|compliance|communications|public\s+relations|marketing|brand\s+manager|copywriter|creative\s+director|finance|accounting|accountant|tax\b|payroll|audit|treasury|customer\s+success|client\s+partner|vendor\s+operations|market\s+(?:manager|associate|coordinator)|office\s+manager|executive\s+assistant|administrative|facilities|workplace|supply\s+chain|procurement|category\s+lead|operations\s+(?:specialist|manager|associate))\b/i;
 
@@ -53,9 +46,7 @@ export function matchesExperienceFilter(
   filter: string
 ): boolean {
   if (!filter || filter === 'all') return true;
-  // Jobs with no detectable experience range pass through the broadest bracket
-  // (they're often fresher roles that just don't state years explicitly)
-  if (req.experienceMin == null) return filter === '0-5';
+  if (req.experienceMin == null) return true; // assumed 0–1, always passes
   if (filter === '0-2') return req.experienceMin <= 2;
   if (filter === 'lt5') return req.experienceMin < 5;
   if (filter === '0-5') return req.experienceMin <= 5;
@@ -541,20 +532,20 @@ export function extractJobRequirements(
 
   const parsedRange = pickExperienceRange(structuredExp, allCleanLines);
 
-  // If no explicit year range found in the body, infer min=0 from the job title
-  // so roles like "Associate SDE", "SDE I", "Intern" pass entry-level filters.
-  const inferredRange: ParsedExperienceRange | null =
-    parsedRange === null && FRESHER_TITLE_RE.test(job.title ?? '')
-      ? { summary: '0–1 years (inferred)', min: 0, max: 1 }
-      : null;
-
-  const finalRange = parsedRange ?? inferredRange;
+  // When no explicit experience range is found anywhere, default to 0–1 years.
+  // This ensures jobs that simply don't state years (common for fresher roles)
+  // are still visible under entry-level filters instead of being hidden.
+  const finalRange: ParsedExperienceRange = parsedRange ?? {
+    summary: '0–1 years (assumed)',
+    min: 0,
+    max: 1,
+  };
 
   return {
     technologies: [...techSet.values()],
-    experienceSummary: finalRange?.summary ?? null,
-    experienceMin: finalRange?.min ?? null,
-    experienceMax: finalRange?.max ?? null,
+    experienceSummary: finalRange.summary,
+    experienceMin: finalRange.min,
+    experienceMax: finalRange.max,
     experience: [...experienceSet.values()],
   };
 }
